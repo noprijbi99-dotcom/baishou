@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: MIT
-// BAISHOU - FORK TEST jalur POOL OPEN (loop NYATA, tanpa vm.store).
-// Bedanya dari PoolOpen.t.sol: di sana pool dibuka via _fastForwardToOpen()
-// (vm.store memalsukan 167.999 share). Di sini 1.000 agen beneran mint
-// 168 share masing-masing pada harga produksi (priceDiv = 1) sampai
-// OPEN_AT = 168.000 tercapai, lalu angka escrow diverifikasi PERSIS dari
-// konstanta kontrak: total deposit 282,24 BNB -> treasury 15% = 42,336 BNB
-// (dibayar sekali saat _open), referral 5% = 14,112 BNB (klaim PULL oleh
-// satu referrer yang sama untuk semua minter), pool 80% = 225,792 BNB.
+// BAISHOU - FORK TEST of the POOL OPEN path (REAL loop, no vm.store).
+// Unlike PoolOpen.t.sol: there the pool was opened via _fastForwardToOpen()
+// (vm.store fakes 167.999 shares). Here 1.000 agents really mint
+// 168 shares each at the production price (priceDiv = 1) until
+// OPEN_AT = 168.000 is reached, then the escrow numbers are verified EXACTLY from
+// contract constants: total deposits 282,24 BNB -> treasury 15% = 42,336 BNB
+// (paid once at _open), referral 5% = 14,112 BNB (PULL claim by
+// one and the same referrer for all minters), pool 80% = 225,792 BNB.
 pragma solidity ^0.8.24;
 
 import {BaishouTest} from "./Baishou.t.sol";
@@ -20,8 +20,8 @@ contract ForkOpenTest is BaishouTest {
     }
 
     function test_RealLoopOpensPoolWithExactEscrowSplit() public {
-        // Satu referrer valid untuk SEMUA minter -> seluruh 5% terkumpul
-        // di satu alamat dan bisa diverifikasi sebagai satu angka.
+        // One valid referrer for ALL minters -> the entire 5% accumulates
+        // at one address and can be verified as a single number.
         address refking = makeAddr("refking");
         registry.setHandle(refking, "refking");
         registry.setOwner(uint256(keccak256(bytes("refking"))), refking);
@@ -30,10 +30,10 @@ contract ForkOpenTest is BaishouTest {
         uint256 cost168 = mint.costOf(sharesPerAgent);
         assertEq(cost168, sharesPerAgent * mint.BASE_PRICE(), "harga flat pre-pool");
 
-        // Gas metering dimatikan HANYA untuk loop massal ini: 168.000
-        // share-iterasi nyata ≈ 1,62 miliar gas, di atas cap metering
-        // default forge per test (2^30). Eksekusi EVM-nya tetap penuh —
-        // yang dimatikan cuma akuntansi gas test runner.
+        // Gas metering is disabled ONLY for this mass loop: 168.000
+        // real share-iterations ≈ 1,62 billion gas, above the default forge
+        // per-test metering cap (2^30). The EVM execution is still complete —
+        // only the test runner's gas accounting is disabled.
         vm.pauseGasMetering();
         for (uint256 i; i < AGENTS; i++) {
             address agent = _agentAt(i);
@@ -46,13 +46,13 @@ contract ForkOpenTest is BaishouTest {
         }
         vm.resumeGasMetering();
 
-        // ---- Pool harus sudah buka PERSIS di share 168.000 ----
+        // ---- The pool must already be open EXACTLY at share 168.000 ----
         assertTrue(mint.opened(), "pool buka di share 168.000 (loop nyata)");
         assertTrue(token.tradingEnabled(), "trading dibuka");
         assertEq(mint.totalMinted(), mint.OPEN_AT(), "totalMinted = OPEN_AT");
         assertEq(mint.participantCount(), AGENTS, "1.000 peserta unik terdaftar");
 
-        // ---- Angka dari konstanta kontrak, di-cross-check ke literal ----
+        // ---- Numbers from contract constants, cross-checked against literals ----
         uint256 totalDeposits = uint256(mint.OPEN_AT()) * mint.BASE_PRICE();
         uint256 expectedTreasury = totalDeposits * mint.TREASURY_BPS() / 10_000;
         uint256 expectedReferral = totalDeposits * mint.REFERRAL_BPS() / 10_000;
@@ -61,14 +61,14 @@ contract ForkOpenTest is BaishouTest {
         assertEq(expectedReferral, 14.112 ether, "referral 5% = 14,112 BNB");
         assertEq(mint.totalPaid(), totalDeposits, "totalPaid = total deposit");
 
-        // Treasury: escrow 15% dibayar SEKALI saat _open (bukan via claim).
+        // Treasury: the 15% escrow is paid ONCE at _open (not via claim).
         assertEq(treasury.balance, expectedTreasury, "treasury terima 42,336 BNB saat pool buka");
         assertEq(mint.escrowTreasury(), 0, "escrow treasury lunas saat _open");
         vm.prank(treasury);
         vm.expectRevert(AgentMint.NothingOwed.selector);
         mint.claimTreasury();
 
-        // Referral: 5% TIDAK dibayar di _open; klaim PULL oleh referrer.
+        // Referral: the 5% is NOT paid at _open; PULL claim by the referrer.
         assertEq(mint.referralAccrued(refking), expectedReferral, "akrual referral 14,112 BNB");
         uint256 refBefore = refking.balance;
         vm.prank(refking);
@@ -76,13 +76,13 @@ contract ForkOpenTest is BaishouTest {
         assertEq(refking.balance, refBefore + expectedReferral, "referrer klaim 14,112 BNB penuh");
         assertEq(mint.referralAccrued(refking), 0, "akrual referral habis");
 
-        // Pool: 80% + token pool persis seperti konstanta.
+        // Pool: 80% + pool tokens exactly as the constants.
         (uint256 rBnb, uint256 rToken) = mint.reserves();
         assertEq(rBnb, mint.OPEN_BNB(), "reserve BNB = OPEN_BNB");
         assertEq(rBnb, 225.792 ether, "reserve BNB = 225,792 BNB");
         assertEq(rToken, mint.OPEN_TOKENS(), "reserve token = OPEN_TOKENS");
 
-        // Spot check: agen pertama pegang token penuh 168 share.
+        // Spot check: the first agent holds the full tokens of 168 shares.
         assertEq(
             token.balanceOf(_agentAt(0)),
             sharesPerAgent * mint.USER_SHARE(),
@@ -90,7 +90,7 @@ contract ForkOpenTest is BaishouTest {
         );
         assertEq(mint.deposits(_agentAt(0)), cost168, "deposit agen pertama tercatat penuh");
 
-        // ---- claimTreasury bekerja untuk akrual PASCA-pool ----
+        // ---- claimTreasury works for POST-pool accrual ----
         address late = _agentAt(9_999);
         registry.setHandle(late, "late");
         registry.setOwner(uint256(keccak256(bytes("late"))), late);

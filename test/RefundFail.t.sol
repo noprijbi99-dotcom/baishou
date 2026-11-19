@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
-// BAISHOU - jalur REFUND GAGAL (target 168.000 share tidak tercapai
-// dalam jendela sale 14 hari sejak startSale — v2).
-// Desain FINAL: SEMUA paid mint refund 100% via klaim PULL (tiap orang klaim
-// sendiri; jendela klaim 90 hari; sisa yang tidak diklaim setelah 90 hari
-// dibakar ke dead address - tidak ada yang diuntungkan dari refund tak diklaim).
+// BAISHOU - the FAILED REFUND path (the 168.000-share target is not reached
+// within the 14-day sale window from startSale — v2).
+// FINAL design: ALL paid mints refund 100% via PULL claims (each person claims
+// themselves; 90-day claim window; leftovers unclaimed after 90 days
+// are burned to the dead address - nobody profits from unclaimed refunds).
 pragma solidity ^0.8.24;
 
 import {BaishouTest} from "./Baishou.t.sol";
@@ -25,7 +25,7 @@ contract RefundFailTest is BaishouTest {
         mint.claimRefund();
         assertEq(alice.balance, before + paid, "refund 100% penuh");
         assertEq(mint.deposits(alice), 0, "deposit habis sesudah klaim");
-        // Klaim ke-2: tidak ada lagi.
+        // Second claim: nothing left.
         vm.prank(alice);
         vm.expectRevert(AgentMint.NothingOwed.selector);
         mint.claimRefund();
@@ -34,13 +34,13 @@ contract RefundFailTest is BaishouTest {
     function test_FailRefundWindow90Days() public {
         _mintAs(alice, 10, address(0));
         _mintAs(bob, 10, address(0));
-        // Batas akhir jendela (inklusif): alice masih bisa klaim.
+        // End of the window (inclusive): alice can still claim.
         vm.warp(mint.failureTime() + 90 days);
         uint256 before = alice.balance;
         vm.prank(alice);
         mint.claimRefund();
         assertEq(alice.balance, before + 10 * 0.00168 ether, "klaim di hari ke-90 berhasil");
-        // Selewat 1 detik: bob sudah terlambat.
+        // One second past: bob is already too late.
         vm.warp(vm.getBlockTimestamp() + 1);
         vm.prank(bob);
         vm.expectRevert(AgentMint.RefundExpired.selector);
@@ -69,7 +69,7 @@ contract RefundFailTest is BaishouTest {
         vm.prank(stranger);
         vm.expectRevert(AgentMint.NotSweepable.selector);
         mint.sweepUnclaimed();
-        vm.warp(mint.failureTime() + 90 days); // tepat di batas: masih terlalu dini
+        vm.warp(mint.failureTime() + 90 days); // exactly at the boundary: still too early
         vm.prank(stranger);
         vm.expectRevert(AgentMint.NotSweepable.selector);
         mint.sweepUnclaimed();
@@ -91,7 +91,7 @@ contract RefundFailTest is BaishouTest {
     }
 
     function test_RefundPullNeverPush() public {
-        // PULL: alice klaim hanya membayar alice; bob tidak berubah.
+        // PULL: alice's claim only pays alice; bob is unchanged.
         _mintAs(alice, 10, address(0));
         _mintAs(bob, 10, address(0));
         _fail();

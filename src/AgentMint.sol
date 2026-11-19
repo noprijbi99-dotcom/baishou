@@ -1,33 +1,33 @@
 // SPDX-License-Identifier: MIT
 // *****************************************************************************
 // BAISHOU — AgentMint.sol — FINAL (step 2, 19 Nov 2026)
-// Fork basis: $AIC AgentMint (BscScan-verified, MIT). Desain final:
-// ~/workspace/launchpad-research/POLA-BARU-ARUNIKA.md §3/§4/§8b/§10 (Opsi B).
+// Fork basis: $AIC AgentMint (BscScan-verified, MIT). Final design:
+// ~/workspace/launchpad-research/POLA-BARU-ARUNIKA.md §3/§4/§8b/§10 (Option B).
 //
-// ANGKA FINAL (user 19 Nov 13:22 WIB, shares 10x): TOTAL 1.680.000 share;
-// pre-pool 168.000 @ 0,00168 BNB flat, 168.000.000 token/share TETAP
-// (pre-pool DAN pasca-pool — JANGAN rumus AIC pay*p.t/p.u); pool buka di
-// share 168.000: 225,792 BNB + 22,5792 triliun token; kurva LINEAR +2% per
-// epoch 16.800 share, cap 0,00336 BNB (2x) di share 1.008.000, lalu flat.
-// MAX_SUPPLY 510,8544 triliun — dicek tiap mint, revert SoldOut/SupplyCap.
+// FINAL NUMBERS (user, 19 Nov 06:22 UTC, shares 10x): TOTAL 1.680.000 shares;
+// pre-pool 168.000 @ 0,00168 BNB flat, 168.000.000 tokens/share FIXED
+// (pre-pool AND post-pool — do NOT use the AIC pay*p.t/p.u formula); pool opens at
+// share 168.000: 225,792 BNB + 22,5792 trillion tokens; LINEAR curve +2% per
+// epoch of 16.800 shares, cap 0,00336 BNB (2x) at share 1.008.000, then flat.
+// MAX_SUPPLY 510,8544 trillion — checked on every mint, reverts SoldOut/SupplyCap.
 //
-// YANG DIHAPUS dari fork AIC: BurnMath/floor total (FLOOR/BURN_BUDGET/
+// REMOVED from the AIC fork: BurnMath/total floor (FLOOR/BURN_BUDGET/
 // RISE_WINDOW/RISE_CAP/POOL_FLOOR, floorValue, _resetWindow, riseWindow*,
-// PoolBurned, burn di _settle, burnFromPair); invite/poin/level/rebate
-// instan (points, invitesOn, dayAwarded, awardDay, levelOf, rebateBpsOf,
+// PoolBurned, burn in _settle, burnFromPair); instant invite/points/level/rebate
+// (points, invitesOn, dayAwarded, awardDay, levelOf, rebateBpsOf,
 // _creditInvite, _rebate, REBATE_MIN/POINTS_PER_LEVEL/MAX_LEVEL/AWARDS_PER_DAY);
 // social tasks (claimSocial, TASK_*, socialDone, accountAgent, extraQuota);
-// DAY_SECONDS/DAY_OFFSET/today(); quotaSigner (tak terpakai lagi).
+// DAY_SECONDS/DAY_OFFSET/today(); quotaSigner (no longer used).
 //
-// ESCROW (§8b, MENGIKAT): treasury 15% + referral 5% TIDAK PERNAH dibayar
-// sebelum pool buka. Pre-pool: 15% -> escrowTreasury, 5% -> referralAccrued
-// (atau ke pool kalau tak ada referrer valid), 80% -> pendingBnb. Saat pool
-// buka (_open): escrowTreasury dibayar ke treasury (gagal -> owedOf, PULL via
-// claimOwed); referral pre-pool tetap claimable via claimReferral() sesudah
-// pool buka. Pasca-pool: pola SAMA (akumulasi + claim) — konsisten: treasury
-// klaim via claimTreasury(), referrer via claimReferral(). NOL push instan.
-// Refund/exit TIDAK PERNAH diblokir pause. TIDAK ADA fungsi withdraw/drain:
-// dana hanya ke deposan (refund/exit) atau ke pool.
+// ESCROW (§8b, BINDING): treasury 15% + referral 5% are NEVER paid
+// before the pool opens. Pre-pool: 15% -> escrowTreasury, 5% -> referralAccrued
+// (or to the pool if there is no valid referrer), 80% -> pendingBnb. When the pool
+// opens (_open): escrowTreasury is paid to treasury (on failure -> owedOf, PULL via
+// claimOwed); pre-pool referral stays claimable via claimReferral() after the
+// pool opens. Post-pool: SAME pattern (accumulate + claim) — consistent: treasury
+// claims via claimTreasury(), referrer via claimReferral(). ZERO instant pushes.
+// Refund/exit are NEVER blocked by pause. There is NO withdraw/drain function:
+// funds only go to depositors (refund/exit) or to the pool.
 // *****************************************************************************
 pragma solidity ^0.8.24;
 
@@ -64,15 +64,15 @@ contract AgentMint is ReentrancyGuard {
     uint256 public constant TAX_SWAP_BPS = 10;
     uint256 public constant BASE_PER_ID = 168;
     uint256 public constant MAX_PER_TX = 168;
-    /// @notice Kuota invite DIHAPUS (audit fair-for-all §0): dipertahankan = 0
-    ///         sebagai jejak audit — referral HANYA komisi BNB 5%.
+    /// @notice Invite quota REMOVED (fair-for-all audit §0): kept = 0
+    ///         as an audit trail — referral is ONLY a 5% BNB commission.
     uint256 public constant INVITE_QUOTA = 0;
     uint256 public constant FREE_SHARES = 16_800;
     uint256 public constant EPOCH_SHARES = 16_800;
-    /// @notice Jendela target sale: 14 hari sejak startSale() (v2, keputusan
-    ///         user 19 Nov 2026 — "target dua minggu, setelah itu refund").
+    /// @notice Sale target window: 14 days from startSale() (v2, decision of the
+    ///         user, 19 Nov 2026 — "two-week target, after that a refund").
     uint256 public constant SALE_WINDOW = 14 days;
-    /// @notice Mint pasca-pool tutup 7 hari sesudah pool buka (tetap).
+    /// @notice Post-pool mint closes 7 days after the pool opens (fixed).
     uint256 public constant POST_POOL_WINDOW = 7 days;
     uint256 public constant REFUND_WINDOW = 90 days;
     address public constant DEAD = 0x000000000000000000000000000000000000dEaD;
@@ -81,24 +81,24 @@ contract AgentMint is ReentrancyGuard {
     IPancakePair public immutable pair;
     address public immutable wbnb;
     IAgentHandles public immutable registrar;
-    /// @notice Penerima treasury 15% — hanya terima dana (escrow saat pool
-    ///         buka + claim pasca-pool); tanpa hak admin apa pun.
+    /// @notice Treasury 15% recipient — only receives funds (escrow at pool
+    ///         open + post-pool claim); with no admin rights whatsoever.
     address public immutable treasury;
-    /// @notice feeTreasury dipertahankan untuk kompatibilitas Config; TIDAK
-    ///         LAGI menerima pajak trading (hasil swap pajak -> dividend pool).
+    /// @notice feeTreasury kept for Config compatibility; it NO LONGER
+    ///         receives trading tax (tax swap proceeds -> dividend pool).
     address public immutable feeTreasury;
     address public immutable admin;
     uint256 public immutable swapFeeBps;
     uint256 public immutable BASE_PRICE;
     uint256 public immutable OPEN_BNB;
-    /// @notice Waktu deploy — INFORMATIONAL saja (v2/RT-01: tidak ada jam
-    ///         yang berjangkar deploy; jam sale mulai di startSale()).
+    /// @notice Deploy time — INFORMATIONAL only (v2/RT-01: no clock is
+    ///         anchored to deploy; the sale clock starts at startSale()).
     uint256 public immutable deployTime;
     bool private immutable _bnbIs0;
 
     uint256 public totalMinted;
     uint256 public totalPaid;
-    bool public paused = true; // deploy dalam keadaan pause; admin buka via startSale()
+    bool public paused = true; // deployed paused; the admin opens it via startSale()
     bool public renounced;
     bool public reviewPassed;
     uint256 public pendingBnb;
@@ -120,7 +120,7 @@ contract AgentMint is ReentrancyGuard {
     mapping(uint256 => bool) public claimedFree;
     uint256 public freeClaimed;
 
-    // —— Agent Registry (ringan, bukti peserta unik hackathon) ——
+    // —— Agent Registry (lightweight, proof of unique hackathon participants) ——
     mapping(uint256 => bool) public registered;
     uint256[] public participants;
     uint256 public participantCount;
@@ -129,11 +129,11 @@ contract AgentMint is ReentrancyGuard {
 
     mapping(address => bool) public unblockable;
 
-    // —— v2: jam sale berjangkar MULAI SALE (RT-01) ——
-    /// @notice Waktu startSale() dipanggil admin; 0 = sale belum dimulai
-    ///         (jam kegagalan BELUM jalan — saleFailed() selalu false dan
-    ///         failureTime() = 0). Ditaruh di slot storage terakhir supaya
-    ///         layout v1 tidak bergeser.
+    // —— v2: sale clock anchored to SALE START (RT-01) ——
+    /// @notice Time startSale() was called by the admin; 0 = sale not started
+    ///         (the failure clock has NOT started — saleFailed() is always false and
+    ///         failureTime() = 0). Placed in the last storage slot so the
+    ///         v1 layout does not shift.
     uint256 public saleStartTime;
 
     event PausedSet(bool paused);
@@ -190,7 +190,7 @@ contract AgentMint is ReentrancyGuard {
         address wbnb;
         uint256 swapFeeBps;
         address[] unblockable;
-        /// @dev Formal 1; test boleh > 1 asal membagi habis harga & OPEN_BNB.
+        /// @dev Formally 1; tests may use > 1 as long as it divides the price & OPEN_BNB exactly.
         uint256 priceDiv;
     }
 
@@ -224,10 +224,10 @@ contract AgentMint is ReentrancyGuard {
         if (msg.sender != wbnb) revert BadPayment();
     }
 
-    /// @notice Harga per share ke-n dalam satuan BASE_PRICE/100.
-    ///         n <= 168.000 -> 100 (flat). Sesudah itu epoch =
+    /// @notice Price of the n-th share in units of BASE_PRICE/100.
+    ///         n <= 168.000 -> 100 (flat). After that epoch =
     ///         (n-168.001)/16.800 + 1, units = min(100 + 2*epoch, 200).
-    ///         Cap 0,00336 (2x) tercapai di share 1.008.000, lalu flat.
+    ///         The 0,00336 cap (2x) is reached at share 1.008.000, then flat.
     function priceUnits(uint256 n) public pure returns (uint256) {
         if (n <= OPEN_AT) return 100;
         uint256 epoch = (n - OPEN_AT - 1) / EPOCH_SHARES + 1;
@@ -237,15 +237,15 @@ contract AgentMint is ReentrancyGuard {
 
     function costOf(uint256 shares) public view returns (uint256 cost) {
         uint256 n = totalMinted;
-        // BASE_PRICE % 100 == 0 dijamin constructor, jadi (BASE_PRICE/100)
-        // eksak — tidak ada kehilangan presisi dari pembagian ini.
+        // BASE_PRICE % 100 == 0 is guaranteed by the constructor, so (BASE_PRICE/100)
+        // is exact — no precision is lost in this division.
         uint256 unit = BASE_PRICE / 100;
         for (uint256 i; i < shares; i++) {
             cost += priceUnits(n + 1 + i) * unit;
         }
     }
 
-    /// @notice Kuota = BASE_PER_ID untuk semua Agent ID (extraQuota dihapus).
+    /// @notice Quota = BASE_PER_ID for every Agent ID (extraQuota removed).
     function quotaOf(uint256) public pure returns (uint256) {
         return BASE_PER_ID;
     }
@@ -254,20 +254,20 @@ contract AgentMint is ReentrancyGuard {
         return openedTime != 0;
     }
 
-    /// @notice Deadline target sale = saleStartTime + SALE_WINDOW (14 hari).
-    ///         Mengembalikan 0 sebelum sale dimulai (jam belum jalan).
+    /// @notice Sale target deadline = saleStartTime + SALE_WINDOW (14 days).
+    ///         Returns 0 before the sale starts (clock not running).
     function failureTime() public view returns (uint256) {
         return saleStartTime == 0 ? 0 : saleStartTime + SALE_WINDOW;
     }
 
-    /// @notice Launch gagal: sale SUDAH dimulai, deadline 14 hari lewat &
-    ///         pool belum buka. Sebelum startSale(): selalu false, di
-    ///         timestamp berapa pun (tidak ada bom waktu dari deploy).
+    /// @notice Launch failed: the sale HAS started, the 14-day deadline has passed &
+    ///         the pool has not opened. Before startSale(): always false, at
+    ///         any timestamp (no time bomb from deploy).
     function saleFailed() public view returns (bool) {
         return saleStartTime != 0 && !opened() && block.timestamp > failureTime();
     }
 
-    /// @notice Mint tutup 7 hari sesudah pool buka ATAU saat 1.680.000 share.
+    /// @notice Mint closes 7 days after the pool opens OR at 1.680.000 shares.
     function mintClosed() public view returns (bool) {
         return opened() && (block.timestamp > openedTime + POST_POOL_WINDOW || totalMinted >= TOTAL_SHARES);
     }
@@ -298,8 +298,8 @@ contract AgentMint is ReentrancyGuard {
         emit ParticipantRegistered(id, msg.sender);
     }
 
-    /// @notice Klaim PULL atas pembayaran yang gagal ditransfer (mis. treasury
-    ///         saat _open). Bukan jalur refund — lihat claimRefund().
+    /// @notice PULL claim for a payment that failed to transfer (e.g. treasury
+    ///         during _open). Not the refund path — see claimRefund().
     function claimOwed() external nonReentrant {
         uint256 amount = owedOf[msg.sender];
         if (amount == 0) revert NothingOwed();
@@ -310,7 +310,7 @@ contract AgentMint is ReentrancyGuard {
         emit OwedClaimed(msg.sender, amount);
     }
 
-    /// @dev Admin hanya admin; treasury tidak punya hak admin.
+    /// @dev Admin is admin only; treasury has no admin rights.
     function _onlyAdmin() private view {
         if (msg.sender != admin) revert NotAdmin();
         if (renounced) revert AdminRenounced();
@@ -322,21 +322,21 @@ contract AgentMint is ReentrancyGuard {
         emit PausedSet(next);
     }
 
-    /// @notice Gerbang review independen: renounce() terkunci sampai true.
+    /// @notice Independent-review gate: renounce() is locked until this is true.
     function setReviewPassed(bool next) external {
         _onlyAdmin();
         reviewPassed = next;
         emit ReviewPassedSet(next);
     }
 
-    /// @notice Mulai sale — SATU KALI, admin (v2/RT-01+RT-02): menetapkan
-    ///         saleStartTime = sekarang (jam target 14 hari mulai jalan)
-    ///         dan membuka pause secara atomik dalam satu tx. Sebelum
-    ///         fungsi ini dipanggil, kontrak boleh menunggu selamanya:
-    ///         tidak ada deadline yang berjalan dari deploy. Pool hanya
-    ///         bisa buka lewat jalur mint mencapai OPEN_AT (openEarly
-    ///         DIHAPUS di v2 — tidak ada lagi jalur buka pool dini yang
-    ///         membatalkan janji escrow/refund).
+    /// @notice Start the sale — ONE TIME, admin (v2/RT-01+RT-02): sets
+    ///         saleStartTime = now (the 14-day target clock starts running)
+    ///         and unpauses atomically in a single tx. Before this
+    ///         function is called, the contract may wait forever:
+    ///         no deadline runs from deploy. The pool can only
+    ///         open via the mint path reaching OPEN_AT (openEarly was
+    ///         REMOVED in v2 — there is no longer any early pool-open path that
+    ///         would void the escrow/refund promise).
     function startSale() external {
         _onlyAdmin();
         if (saleStartTime != 0) revert AlreadyStarted();
@@ -384,7 +384,7 @@ contract AgentMint is ReentrancyGuard {
         }
     }
 
-    /// @return refAddr referrer valid (Agent ID, bukan minter) atau address(0)
+    /// @return refAddr valid referrer (Agent ID, not the minter) or address(0)
     function _validReferrer(address from, uint256 id, address referrer) private view returns (address refAddr) {
         if (referrer == address(0) || referrer == from) return address(0);
         (uint256 rid, bool rok) = _agent(referrer);
@@ -429,9 +429,9 @@ contract AgentMint is ReentrancyGuard {
         if (mintedCount[id] + shares > quotaOf(id)) revert Quota();
     }
 
-    /// @notice Free claim: 1x per Agent ID, 168.000.000 token, tanpa BNB,
-    ///         first-come sampai 16.800 klaim. TIDAK menambah mintedCount
-    ///         (tidak mengurangi cap beli 168). Pause memblokir free mint.
+    /// @notice Free claim: 1x per Agent ID, 168.000.000 tokens, no BNB,
+    ///         first-come until 16.800 claims. Does NOT add to mintedCount
+    ///         (does not reduce the 168 buy cap). Pause blocks free mint.
     function freeMint() external nonReentrant {
         if (paused) revert Paused();
         if (saleFailed()) revert SoldOut();
@@ -458,8 +458,8 @@ contract AgentMint is ReentrancyGuard {
     }
 
     function _mintShares(uint256 id, uint256 shares, uint256 cost, address referrer) private {
-        // Referrer divalidasi SEKALI per tx; 5% masuk referralAccrued (escrow),
-        // bukan dibayar instan. Tanpa referrer valid -> 5% masuk pool.
+        // The referrer is validated ONCE per tx; 5% goes to referralAccrued (escrow),
+        // not paid instantly. Without a valid referrer -> 5% goes to the pool.
         address refAddr = _validReferrer(msg.sender, id, referrer);
         if (refAddr != address(0) && referrerOf[msg.sender] == address(0)) {
             referrerOf[msg.sender] = refAddr;
@@ -482,7 +482,7 @@ contract AgentMint is ReentrancyGuard {
                 referralAccrued[refAddr] += referralCut;
                 poolPart = pay - treasuryCut - referralCut;
             } else {
-                poolPart = pay - treasuryCut; // referral 5% jatuh ke pool
+                poolPart = pay - treasuryCut; // the referral 5% falls to the pool
             }
             totalPaid += pay;
             deposits[msg.sender] += pay;
@@ -494,8 +494,8 @@ contract AgentMint is ReentrancyGuard {
                 if (n == OPEN_AT) {
                     token.mint(msg.sender, userT);
                     userT = 0;
-                    // poolPart bisa 80% (ada referrer) atau 85% (tanpa
-                    // referrer) per share, jadi pendingBnb >= OPEN_BNB.
+                    // poolPart can be 80% (with referrer) or 85% (without
+                    // referrer) per share, so pendingBnb >= OPEN_BNB.
                     if (pendingBnb < OPEN_BNB || pendingTokens != OPEN_TOKENS) revert BadPayment();
                     _open(pendingBnb + forfeitPool, OPEN_TOKENS);
                     live = true;
@@ -512,7 +512,7 @@ contract AgentMint is ReentrancyGuard {
         if (live && p.addU > 0) _settle(p);
         emit Minted(msg.sender, id, first, shares, cost);
 
-        // Swap otomatis pajak yang terkumpul (sekali per blok); gagal -> event.
+        // Auto-swap of accumulated tax (once per block); on failure -> event.
         if (live && lastTaxSwapBlock != block.number && token.balanceOf(address(this)) > 0) {
             try this.swapTaxSelf() {}
             catch (bytes memory why) {
@@ -527,10 +527,10 @@ contract AgentMint is ReentrancyGuard {
         p.supply = token.totalSupply();
     }
 
-    /// @dev FIXED TOKENS: userT = USER_SHARE tetap per share (pre-pool DAN
-    ///      pasca-pool); lpT ikut kurva pool. JANGAN rumus AIC
-    ///      pay*p.t/p.u (rata-rata pasca-pool ~290 jt/share, max supply
-    ///      jebol ke ~1,097 kuadriliun vs cap 510,8544 triliun).
+    /// @dev FIXED TOKENS: userT = USER_SHARE fixed per share (pre-pool AND
+    ///      post-pool); lpT follows the pool curve. Do NOT use the AIC
+    ///      pay*p.t/p.u formula (post-pool average ~290M/share, max supply
+    ///      would blow out to ~1,097 quadrillion vs the 510,8544 trillion cap).
     function _curveShare(Pool memory p, uint256 lpBnb) private {
         uint256 userT = USER_SHARE;
         uint256 lpT = (lpBnb * p.t + p.u - 1) / p.u;
@@ -552,12 +552,12 @@ contract AgentMint is ReentrancyGuard {
     }
 
     function _open(uint256 bnbIn, uint256 tokensIn) private {
-        // Tandai buka DULU sebelum panggilan eksternal apa pun (CEI).
+        // Mark open FIRST before any external call (CEI).
         openedTime = block.timestamp;
         pendingBnb = 0;
         pendingTokens = 0;
         forfeitPool = 0;
-        // Bayar escrow treasury SEKALI saat pool buka; gagal -> owedOf (PULL).
+        // Pay the treasury escrow ONCE when the pool opens; on failure -> owedOf (PULL).
         uint256 treasuryDue = escrowTreasury;
         escrowTreasury = 0;
         if (treasuryDue > 0) _payOrOwe(treasury, treasuryDue);
@@ -570,13 +570,13 @@ contract AgentMint is ReentrancyGuard {
     }
 
     // ============ EXIT / REFUND ============
-    // Pause TIDAK PERNAH memblokir fungsi-fungsi di seksi ini (§8b).
+    // Pause NEVER blocks the functions in this section (§8b).
 
-    /// @notice Keluar sebelum pool buka: kembali 80% x shares x harga
-    ///         pre-pool flat; 20% ditahan sebagai forfeit kondisional
-    ///         (ke LP kalau sukses, kembali 100% kalau launch gagal).
-    ///         Bakar share + token pemanggil. Hanya selama net shares
-    ///         < target (168.000) dan pool belum buka.
+    /// @notice Exit before the pool opens: returns 80% x shares x the flat
+    ///         pre-pool price; 20% is held as a conditional forfeit
+    ///         (to LP if successful, back 100% if the launch fails).
+    ///         Burns the caller's shares + tokens. Only while net shares
+    ///         < target (168.000) and the pool has not opened.
     function exit(uint256 shares) external nonReentrant {
         if (opened() || totalMinted >= OPEN_AT) revert ExitClosed();
         (uint256 id, bool ok) = _agent(msg.sender);
@@ -593,7 +593,7 @@ contract AgentMint is ReentrancyGuard {
             referralAccrued[refAddr] -= referralCut;
             pendingBnb -= refund;
         } else {
-            pendingBnb -= refund + referralCut; // 5% dulu masuk pool
+            pendingBnb -= refund + referralCut; // the 5% went to the pool first
         }
         forfeitOf[msg.sender] += forfeit;
         forfeitPool += forfeit;
@@ -607,9 +607,9 @@ contract AgentMint is ReentrancyGuard {
         _pay(msg.sender, refund);
     }
 
-    /// @notice Refund 100% PULL kalau launch GAGAL (deadline lewat, pool
-    ///         belum buka): deposits + forfeit. Jendela 90 hari sejak gagal.
-    ///         TIDAK PERNAH dibayar kalau pool sudah buka.
+    /// @notice 100% PULL refund if the launch FAILS (deadline passed, pool
+    ///         not opened): deposits + forfeit. 90-day window from failure.
+    ///         NEVER paid if the pool has opened.
     function claimRefund() external nonReentrant {
         if (!saleFailed()) revert NotFailed();
         if (block.timestamp > failureTime() + REFUND_WINDOW) revert RefundExpired();
@@ -621,8 +621,8 @@ contract AgentMint is ReentrancyGuard {
         _pay(msg.sender, amount);
     }
 
-    /// @notice Sesudah jendela refund 90 hari lewat, siapa pun boleh sapu
-    ///         sisa escrow ke DEAD (dibakar, bukan ke tim). Setelah ini escrow 0.
+    /// @notice After the 90-day refund window passes, anyone may sweep the
+    ///         remaining escrow to DEAD (burned, not to the team). After this, escrow is 0.
     function sweepUnclaimed() external nonReentrant {
         if (!saleFailed() || block.timestamp <= failureTime() + REFUND_WINDOW) revert NotSweepable();
         pendingBnb = 0;
@@ -638,10 +638,10 @@ contract AgentMint is ReentrancyGuard {
         emit Swept(amount);
     }
 
-    // ============ CLAIM (treasury / referral, PULL, sesudah pool buka) ============
+    // ============ CLAIM (treasury / referral, PULL, after the pool opens) ============
 
-    /// @notice Treasury klaim akumulasi 15% pasca-pool (pre-pool sudah dibayar
-    ///         sekali di _open). Hanya treasury.
+    /// @notice Treasury claims the accumulated post-pool 15% (pre-pool was paid
+    ///         once in _open). Treasury only.
     function claimTreasury() external nonReentrant {
         if (msg.sender != treasury) revert NotTreasury();
         if (!opened()) revert NotOpen();
@@ -652,8 +652,8 @@ contract AgentMint is ReentrancyGuard {
         _pay(msg.sender, amount);
     }
 
-    /// @notice Referrer klaim komisi 5% yang terakumulasi (pre-pool + pasca-pool).
-    ///         Hanya sesudah pool buka; sebelum itu NOL dibayar.
+    /// @notice Referrer claims the accumulated 5% commission (pre-pool + post-pool).
+    ///         Only after the pool opens; before that, ZERO is paid.
     function claimReferral() external nonReentrant {
         if (!opened()) revert NotOpen();
         uint256 amount = referralAccrued[msg.sender];
@@ -663,7 +663,7 @@ contract AgentMint is ReentrancyGuard {
         _pay(msg.sender, amount);
     }
 
-    // ============ TAX SWAP -> DIVIDEN ============
+    // ============ TAX SWAP -> DIVIDEND ============
 
     function swapTax() external nonReentrant {
         if (!opened()) revert NotOpen();
@@ -676,7 +676,7 @@ contract AgentMint is ReentrancyGuard {
         _swapTax();
     }
 
-    /// @dev BNB hasil swap pajak masuk DIVIDEND POOL token (bukan feeTreasury).
+    /// @dev BNB from the tax swap goes into the token DIVIDEND POOL (not feeTreasury).
     function _swapTax() private {
         (, uint256 rToken) = reserves();
         uint256 amount = token.balanceOf(address(this));
@@ -705,7 +705,7 @@ contract AgentMint is ReentrancyGuard {
         lp.swap(out0, out1, to, "");
     }
 
-    /// @dev Bayar atau catat utang (fallback PULL) — dipakai _open untuk treasury.
+    /// @dev Pay or record a debt (PULL fallback) — used by _open for treasury.
     function _payOrOwe(address to, uint256 amount) private {
         IWrappedBNB(wbnb).withdraw(amount);
         (bool ok,) = to.call{value: amount}("");

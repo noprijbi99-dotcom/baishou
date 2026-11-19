@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: MIT
-// BAISHOU - jalur DIVIDEN holder (pajak trading 2%/2% -> 1% burn + 1% dividen).
-// Desain FINAL: dividen pro-rata per token via accumulator claims
-// (magnifiedDividendPerShare). Pajak beli 2% + pajak jual 1% kept masuk
-// minter, lalu swapTax() jual jadi BNB -> DIVIDEND POOL token (0% ke tim).
-// ⚠️ JUJUR: dividen adalah DEBU - volume 100 BNB/bulan -> holder cap
-// ~$0,06/bulan. Dividen TIDAK PERNAH dijanjikan sebagai penghasilan.
+// BAISHOU - the holder DIVIDEND path (trading tax 2%/2% -> 1% burn + 1% dividend).
+// FINAL design: pro-rata dividends per token via accumulator claims
+// (magnifiedDividendPerShare). The 2% buy tax + 1% kept sell tax go to the
+// minter, then swapTax() sells them for BNB -> the token DIVIDEND POOL (0% to the team).
+// ⚠️ HONEST: dividends are DUST - volume of 100 BNB/month -> holder cap
+// ~$0,06/month. Dividends are NEVER promised as income.
 pragma solidity ^0.8.24;
 
 import {BaishouTest} from "./Baishou.t.sol";
@@ -33,7 +33,7 @@ contract DividendTest is BaishouTest {
     function test_BuyTaxGoesToDividendPool() public {
         _mintAs(alice, 10, address(0));
         _openPool(carol);
-        // Simulasi beli: pair -> alice, 2% dipotong ke minter.
+        // Simulated buy: pair -> alice, 2% cut to the minter.
         uint256 buyAmount = 1_000_000 ether;
         uint256 minterBefore = token.balanceOf(address(mint));
         vm.prank(address(_pair()));
@@ -43,9 +43,9 @@ contract DividendTest is BaishouTest {
             token.balanceOf(address(mint)), minterBefore + buyAmount * 200 / 10_000, "beli 2% ke minter"
         );
 
-        // swapTax(): token pajak dijual jadi BNB -> masuk DIVIDEND POOL
-        // token, BUKAN ke feeTreasury. Reserves di-sync dulu karena
-        // simulasi beli di atas adalah transfer biasa (bukan swap).
+        // swapTax(): the tax tokens are sold for BNB -> into the token
+        // DIVIDEND POOL, NOT to feeTreasury. Reserves are synced first because
+        // the simulated buy above is a plain transfer (not a swap).
         _pair().sync();
         uint256 feeBefore = feeTreasury.balance;
         uint256 divBefore = token.totalDividends();
@@ -56,10 +56,10 @@ contract DividendTest is BaishouTest {
     }
 
     function test_DividendAccruesProRata() public {
-        _mintAs(alice, 2, address(0)); // 336 jt token
-        _mintAs(bob, 1, address(0)); // 168 jt token
+        _mintAs(alice, 2, address(0)); // 336M tokens
+        _mintAs(bob, 1, address(0)); // 168M tokens
         _openPool(carol);
-        // Setor dividen langsung via minter (1 BNB) untuk menguji accumulator.
+        // Direct dividend deposit via the minter (1 BNB) to test the accumulator.
         vm.deal(address(mint), 100 ether);
         vm.prank(address(mint));
         token.depositDividends{value: 100 ether}();
@@ -68,9 +68,9 @@ contract DividendTest is BaishouTest {
         assertGt(aliceWd, 0, "alice dapat dividen");
         assertGt(bobWd, 0, "bob dapat dividen");
         assertApproxEqAbs(aliceWd, 2 * bobWd, 10, "alice 2x bob (pro-rata token)");
-        // Yang beli sesudah setoran tidak dapat dividen periode lalu:
-        // carol (trigger mint 1 share) punya token, tapi ia mint SEBELUM
-        // setoran — cek pendatang baru sesudah setoran.
+        // Buyers after a deposit get no dividends from the earlier period:
+        // carol (trigger mint of 1 share) holds tokens, but she minted BEFORE
+        // the deposit — check a newcomer after the deposit.
         assertEq(token.withdrawableDividendOf(stranger), 0, "non-holder 0");
     }
 
@@ -87,7 +87,7 @@ contract DividendTest is BaishouTest {
         token.claimDividend();
         assertEq(alice.balance, before + due, "klaim transfer BNB dividen");
         assertEq(token.withdrawableDividendOf(alice), 0, "habis diklaim");
-        // Klaim berulang hanya membayar akumulasi BARU sejak klaim terakhir.
+        // Repeated claims only pay the NEW accumulation since the last claim.
         vm.deal(address(mint), 100 ether);
         vm.prank(address(mint));
         token.depositDividends{value: 100 ether}();
@@ -101,8 +101,8 @@ contract DividendTest is BaishouTest {
     function test_DividendMinClaim() public {
         _mintAs(alice, 1, address(0));
         _openPool(carol);
-        // Setoran debu: withdrawable alice di bawah 0,001 BNB -> revert,
-        // tapi TIDAK hangus (tetap terakumulasi).
+        // Dust deposit: alice's withdrawable is below 0,001 BNB -> reverts,
+        // but is NOT forfeited (keeps accumulating).
         vm.deal(address(mint), 0.0001 ether);
         vm.prank(address(mint));
         token.depositDividends{value: 0.0001 ether}();
@@ -113,7 +113,7 @@ contract DividendTest is BaishouTest {
         vm.expectRevert(AgentToken.DividendTooSmall.selector);
         token.claimDividend();
         assertEq(token.withdrawableDividendOf(alice), due, "gagal klaim tidak menghanguskan");
-        // Tambah setoran sampai melewati ambang -> klaim berhasil.
+        // Add deposits until past the threshold -> the claim succeeds.
         vm.deal(address(mint), 1000 ether);
         vm.prank(address(mint));
         token.depositDividends{value: 1000 ether}();

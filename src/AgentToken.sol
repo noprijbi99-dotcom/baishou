@@ -2,18 +2,18 @@
 // *****************************************************************************
 // BAISHOU — AgentToken.sol — FINAL (step 2, 19 Nov 2026)
 // Fork basis: $AIC AgentToken (BscScan-verified, MIT); OpenZeppelin ERC20 (MIT).
-// Desain: ~/workspace/launchpad-research/POLA-BARU-ARUNIKA.md §3/§10 (Opsi B).
+// Design: ~/workspace/launchpad-research/POLA-BARU-ARUNIKA.md §3/§10 (Option B).
 //
 // BAISHOU vs AIC:
-//   - MAX_SUPPLY 444 triliun -> 510,8544 triliun (hard cap, = sold-out penuh
-//     1.680.000 share + free 16.800 share).
-//   - Pajak TETAP 2%/2%: beli 2% ke minter; jual 1% burn + 1% ke minter
-//     (lalu minter swap jadi BNB dan masuk DIVIDEND pool — 0% ke tim).
-//   - DIVIDEN (BARU): accumulator ala DividendPayingToken, ditulis ulang
-//     sendiri (magnifiedDividendPerShare, magnitude 2**128). BUKAN copas.
+//   - MAX_SUPPLY 444 trillion -> 510,8544 trillion (hard cap, = full sold-out
+//     1.680.000 shares + free 16.800 shares).
+//   - Tax FIXED 2%/2%: buy 2% to minter; sell 1% burn + 1% to minter
+//     (then the minter swaps it to BNB and it enters the DIVIDEND pool — 0% to the team).
+//   - DIVIDENDS (NEW): a DividendPayingToken-style accumulator, rewritten
+//     from scratch (magnifiedDividendPerShare, magnitude 2**128). NOT a copy-paste.
 //     depositDividends() onlyMinter; claimDividend() min 0,001 BNB.
-//   - burnFromPair DIHAPUS (BurnMath/floor dihapus total); diganti burnFrom()
-//     umum onlyMinter (dipakai exit(): bakar token minter yang keluar).
+//   - burnFromPair REMOVED (BurnMath/floor removed entirely); replaced by a general
+//     onlyMinter burnFrom() (used by exit(): burns the exiting minter's tokens).
 // *****************************************************************************
 pragma solidity ^0.8.24;
 
@@ -29,9 +29,9 @@ contract AgentToken is ERC20 {
     uint256 public constant BUY_TAX_BPS = 200;
     uint256 public constant SELL_BURN_BPS = 100;
     uint256 public constant SELL_KEEP_BPS = 100;
-    /// @notice Dividend accumulator magnitude (2**128, pola DividendPayingToken).
+    /// @notice Dividend accumulator magnitude (2**128, DividendPayingToken pattern).
     uint256 public constant MAGNITUDE = 2 ** 128;
-    /// @notice Minimum dividend claim (di bawah ini tetap terakumulasi, tidak hangus).
+    /// @notice Minimum dividend claim (below this it keeps accumulating, never forfeited).
     uint256 public constant MIN_DIVIDEND_CLAIM = 0.001 ether;
     uint256 private constant PROBE_GAS = 20_000;
     address public constant DEAD = 0x000000000000000000000000000000000000dEaD;
@@ -47,7 +47,7 @@ contract AgentToken is ERC20 {
     bool public blocksDisabled;
     mapping(address => bool) public blockedPool;
 
-    // —— Dividen (accumulator) ——
+    // —— Dividends (accumulator) ——
     uint256 public magnifiedDividendPerShare;
     mapping(address => int256) public magnifiedDividendCorrections;
     mapping(address => uint256) public withdrawnDividends;
@@ -106,8 +106,8 @@ contract AgentToken is ERC20 {
         _mint(to, amount);
     }
 
-    /// @notice Bakar token dari alamat mana pun — hanya minter (dipakai
-    ///         AgentMint.exit(): bakar token + share pemegang yang keluar).
+    /// @notice Burn tokens from any address — minter only (used by
+    ///         AgentMint.exit(): burns the exiting holder's tokens + shares).
     function burnFrom(address from, uint256 amount) external onlyMinter {
         _burn(from, amount);
     }
@@ -128,9 +128,9 @@ contract AgentToken is ERC20 {
         emit BlocksDisabled();
     }
 
-    /// @notice Minter menyetor BNB hasil swap pajak ke dividend pool.
-    /// @dev Menaikkan magnifiedDividendPerShare pro-rata atas totalSupply
-    ///      saat ini; yang beli sesudah setoran tidak dapat dividen lalu.
+    /// @notice The minter deposits BNB from tax swaps into the dividend pool.
+    /// @dev Raises magnifiedDividendPerShare pro-rata over the current totalSupply
+    ///      at this moment; buyers after a deposit do not receive past dividends.
     function depositDividends() external payable onlyMinter {
         if (msg.value == 0) return;
         uint256 supply = totalSupply();
@@ -149,9 +149,9 @@ contract AgentToken is ERC20 {
         return uint256(acc) - withdrawn;
     }
 
-    /// @notice Klaim dividen BNB pro-rata. Di bawah MIN_DIVIDEND_CLAIM revert
-    ///         (dana tetap terakumulasi, tidak hangus); tidak bisa double-klaim
-    ///         karena withdrawnDividends dicatat sebelum pembayaran.
+    /// @notice Claim pro-rata BNB dividends. Below MIN_DIVIDEND_CLAIM it reverts
+    ///         (funds keep accumulating, never forfeited); double-claim is impossible
+    ///         because withdrawnDividends is recorded before payment.
     function claimDividend() external {
         uint256 amount = withdrawableDividendOf(msg.sender);
         if (amount < MIN_DIVIDEND_CLAIM) revert DividendTooSmall();
@@ -189,9 +189,9 @@ contract AgentToken is ERC20 {
         out = address(uint160(word));
     }
 
-    /// @dev Setiap perpindahan saldo (mint/burn/transfer/pajak) menyesuaikan
-    ///      koreksi dividen supaya saldo baru tidak mewarisi dividen lama dan
-    ///      saldo yang pergi tidak kehilangan dividen yang sudah diperoleh.
+    /// @dev Every balance movement (mint/burn/transfer/tax) adjusts the
+    ///      dividend correction so a new balance does not inherit old dividends and
+    ///      a departing balance does not lose dividends already earned.
     function _applyDividendCorrection(address from, address to, uint256 value) private {
         if (value == 0 || magnifiedDividendPerShare == 0) return;
         int256 delta = int256(magnifiedDividendPerShare * value);
@@ -200,8 +200,8 @@ contract AgentToken is ERC20 {
     }
 
     function _update(address from, address to, uint256 value) internal override {
-        // Mint (from == 0) dan burn (to == 0) selalu diizinkan — burn
-        // dipakai exit() pre-pool saat trading masih tertutup.
+        // Mint (from == 0) and burn (to == 0) are always allowed — burn is
+        // used by pre-pool exit() while trading is still closed.
         if (from == address(0) || to == address(0)) {
             super._update(from, to, value);
             _applyDividendCorrection(from, to, value);

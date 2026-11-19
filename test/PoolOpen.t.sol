@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
-// BAISHOU - jalur POOL OPEN (buka pool di share 168.000).
-// Desain FINAL: pool buka otomatis saat share 168.000: 225,792 BNB +
-// 22,5792 triliun token; LP 100% ke DEAD; trading dibuka; mint lanjut di
-// kurva epoch; mint tutup 7 hari setelah pool buka ATAU 1.680.000 share.
+// BAISHOU - the POOL OPEN path (pool opens at share 168.000).
+// FINAL design: the pool opens automatically at share 168.000: 225,792 BNB +
+// 22,5792 trillion tokens; LP 100% to DEAD; trading opens; mint continues on
+// the epoch curve; mint closes 7 days after the pool opens OR 1.680.000 shares.
 pragma solidity ^0.8.24;
 
 import {BaishouTest} from "./Baishou.t.sol";
@@ -15,8 +15,8 @@ contract PoolOpenTest is BaishouTest {
         assertFalse(mint.opened(), "pool belum buka saat deploy");
     }
 
-    // v2: openEarly DIHAPUS (RT-02) — tidak ada lagi jalur buka pool dini;
-    // pool HANYA buka saat mint mencapai OPEN_AT (diuji di bawah + ForkOpen).
+    // v2: openEarly REMOVED (RT-02) — no more early pool-open path;
+    // the pool ONLY opens when mint reaches OPEN_AT (tested below + ForkOpen).
 
     function test_PoolOpensAt168000Shares() public {
         _openPool(carol);
@@ -44,7 +44,7 @@ contract PoolOpenTest is BaishouTest {
         assertEq(mint.priceUnits(184_800), 102, "epoch 1 sampai share 184.800");
         assertEq(mint.priceUnits(184_801), 104, "epoch 2: +4%");
         assertEq(mint.priceUnits(201_600), 104, "epoch 2 sampai share 201.600");
-        // costOf di tengah epoch 1 (totalMinted = 168.000 -> share berikut 102).
+        // costOf mid epoch 1 (totalMinted = 168.000 -> next share 102).
         vm.store(address(mint), bytes32(uint256(0)), bytes32(uint256(168_000)));
         assertEq(mint.costOf(1), 0.00168 ether * 102 / 100, "1 share epoch 1 = 0,0017136");
     }
@@ -82,34 +82,34 @@ contract PoolOpenTest is BaishouTest {
 
     function test_OnePairOnly() public {
         _openPool(carol);
-        // Pair palsu (MockPair token/WBNB lain) ditolak saat transfer.
+        // A fake pair (another MockPair token/WBNB) is rejected on transfer.
         MockPair fake = new MockPair(address(token), address(wbnb));
         address fakeAddr = address(fake);
         address pairAddr = address(_pair());
         vm.prank(alice);
         vm.expectRevert(AgentToken.PoolRejected.selector);
         token.transfer(fakeAddr, 1 ether);
-        // Pair resmi tidak bisa diblokir admin.
+        // The official pair cannot be blocked by the admin.
         vm.prank(admin);
         vm.expectRevert(AgentMint.NotBlockable.selector);
         mint.setPoolBlocked(pairAddr, true);
     }
 
     function test_TreasuryAndReferralPaidAtOpen() public {
-        // Alice mint 10 share dengan referrer bob (pre-pool, nyata).
+        // Alice mints 10 shares with referrer bob (pre-pool, real).
         uint256 costAlice = mint.costOf(10);
         vm.prank(alice);
         mint.mint{value: costAlice}(10, bob, costAlice);
         assertEq(treasury.balance, 0, "treasury 0 sebelum pool buka");
         assertEq(bob.balance, 100 ether, "referrer 0 sebelum pool buka");
 
-        _openPool(carol); // carol mint pemicu 1 share tanpa referrer
+        _openPool(carol); // carol triggers with a 1-share mint, no referrer
         uint256 costTrigger = mint.BASE_PRICE();
         uint256 expectedTreasury = (costAlice + costTrigger) * 1_500 / 10_000;
         assertEq(treasury.balance, expectedTreasury, "treasury 15% dibayar SEKALI saat pool buka");
         assertEq(mint.escrowTreasury(), 0, "escrow treasury kosong sesudah _open");
 
-        // Referral pre-pool tetap claimable (PULL) sesudah pool buka.
+        // Pre-pool referral stays claimable (PULL) after the pool opens.
         uint256 expectedRef = costAlice * 500 / 10_000;
         assertEq(mint.referralAccrued(bob), expectedRef, "5% alice terakru buat bob");
         uint256 bobBefore = bob.balance;
@@ -121,8 +121,8 @@ contract PoolOpenTest is BaishouTest {
 
     function test_PostPoolTreasuryAccruesForClaim() public {
         _openPool(carol);
-        // Mint pasca-pool: treasury TIDAK dibayar langsung (pola akumulasi
-        // + claim yang konsisten dengan pre-pool), tapi terakru.
+        // Post-pool mint: treasury is NOT paid directly (accumulate
+        // + claim pattern, consistent with pre-pool), but accrues.
         uint256 cost = mint.costOf(1);
         uint256 treasuryBefore = treasury.balance;
         vm.prank(alice);

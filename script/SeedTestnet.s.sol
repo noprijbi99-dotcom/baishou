@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
-// BAISHOU - seed MockRegistry di testnet (chain 97) SETELAH Deploy.s.sol.
-// Isi env: REGISTRAR, DEPLOYER_PRIVATE_KEY, TEST_USER_1, TEST_USER_2.
+// BAISHOU - seed MockRegistry on testnet (chain 97) AFTER Deploy.s.sol.
+// Fill in env: REGISTRAR, DEPLOYER_PRIVATE_KEY, TEST_USER_1, TEST_USER_2.
 // Seed: deployer -> handle "alice", TEST_USER_1 -> "bob",
 // TEST_USER_2 -> "carol". id = uint256(keccak256(bytes(handle))).
-// MockRegistry.setHandle/setOwner tanpa access control (mock saja).
+// MockRegistry.setHandle/setOwner without access control (mock only).
 //   forge script script/SeedTestnet.s.sol:SeedTestnet \
 //     --rpc-url https://data-seed-prebsc-1-s1.binance.org:8545/ --broadcast
 pragma solidity ^0.8.24;

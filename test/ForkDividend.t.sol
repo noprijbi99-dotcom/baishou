@@ -1,21 +1,21 @@
 // SPDX-License-Identifier: MIT
-// BAISHOU - FORK TEST jalur DIVIDEN dari SWAP NYATA lewat pair.
-// Bedanya dari Dividend.t.sol: di sana dividen kebanyakan disetor langsung
-// (prank depositDividends) atau pajak disimulasikan via transfer biasa.
-// Di sini rantainya PENUH seperti produksi:
-//   pool dibuka lewat jalur mint NYATA sampai OPEN_AT (v2: openEarly
-//   DIHAPUS — alice 168 share + _fillToOpen 999 agen) -> bob BELI token
-//   lewat pair.swap() (pajak beli 2% masuk minter) -> swapTax() berulang
-//   menjual token pajak jadi BNB -> BNB masuk dividend pool -> holder
-//   (alice) claimDividend() di atas ambang minimum 0,001 BNB, dengan
-//   delta saldo PERSIS sama dengan withdrawableDividendOf sesaat
-//   sebelum klaim.
-// Skala: alice memegang 168 share dari 168.000 (1/1800 dari supply),
-// jadi volume swap dibuat besar (bob beli 9 triliun token) supaya
-// dividen alice dari pajak swap beneran melewati ambang 0,001 BNB —
-// bukan dari setoran artifisial. Pada produksi pun dividen per holder
-// kecil memang debu (lihat catatan jujur di Dividend.t.sol); yang
-// dibuktikan di sini adalah RANTAI mekanismenya bekerja end-to-end.
+// BAISHOU - FORK TEST of the DIVIDEND path from a REAL SWAP through the pair.
+// Unlike Dividend.t.sol: there, dividends were mostly deposited directly
+// (prank depositDividends) or tax was simulated via plain transfers.
+// Here the chain is FULL, like production:
+//   the pool is opened via the REAL mint path to OPEN_AT (v2: openEarly
+//   REMOVED — alice 168 shares + _fillToOpen 999 agents) -> bob BUYS tokens
+//   through pair.swap() (2% buy tax to the minter) -> swapTax() repeatedly
+//   sells the tax tokens for BNB -> BNB enters the dividend pool -> the holder
+//   (alice) calls claimDividend() above the 0,001 BNB minimum threshold, with
+//   a balance delta EXACTLY equal to withdrawableDividendOf moments
+//   before the claim.
+// Scale: alice holds 168 shares of 168.000 (1/1800 of supply),
+// so the swap volume is made large (bob buys 9 trillion tokens) so that
+// alice's dividend from real swap tax passes the 0,001 BNB threshold —
+// not from an artificial deposit. In production, per-holder dividends are
+// indeed small dust (see the honest note in Dividend.t.sol); what
+// is proven here is that the MECHANISM CHAIN works end-to-end.
 pragma solidity ^0.8.24;
 
 import {BaishouTest} from "./Baishou.t.sol";
@@ -23,32 +23,32 @@ import {MockPair} from "./mocks/Mocks.sol";
 
 contract ForkDividendTest is BaishouTest {
     function test_SwapTaxToDividendClaimEndToEnd() public {
-        // --- Pool buka via jalur nyata: alice 168 share + fill 999 agen ---
+        // --- Pool opens via the real path: alice 168 shares + fill 999 agents ---
         _mintAs(alice, 168, address(0));
         _fillToOpen(address(0));
         assertTrue(mint.opened(), "pool buka di OPEN_AT (jalur nyata)");
-        // Escrow treasury 15% dari 282,24 dibayar SEKALI saat _open.
+        // The 15% treasury escrow of 282,24 is paid ONCE at _open.
         assertEq(treasury.balance, 42.336 ether, "treasury 15% dibayar saat pool buka");
         (uint256 rBnb0, uint256 rToken0) = mint.reserves();
         assertEq(rBnb0, 239.904 ether, "pool BNB = 85% x 282,24 (tanpa referrer)");
         assertEq(rToken0, mint.OPEN_TOKENS(), "pool token = OPEN_TOKENS");
 
-        // --- Bob BELI lewat pair.swap(): WBNB masuk, token keluar ---
+        // --- Bob BUYS through pair.swap(): WBNB in, tokens out ---
         MockPair pair = _pair();
         address pairAddr = address(pair);
         vm.prank(bob);
         wbnb.deposit{value: 96 ether}();
         vm.prank(bob);
         wbnb.transfer(pairAddr, 96 ether);
-        uint256 buyOut = 9_000_000_000_000 ether; // 9 triliun token dari pool
+        uint256 buyOut = 9_000_000_000_000 ether; // 9 trillion tokens from the pool
         (uint256 out0, uint256 out1) =
             pair.token0() == address(token) ? (buyOut, uint256(0)) : (uint256(0), buyOut);
         pair.swap(out0, out1, bob, "");
         assertEq(token.balanceOf(bob), buyOut * 9_800 / 10_000, "bob terima 98% (pajak beli 2%)");
         assertEq(token.balanceOf(address(mint)), buyOut * 200 / 10_000, "pajak beli 2% di minter");
 
-        // --- swapTax() berulang (satu per blok) sampai token pajak habis:
-        //     token pajak -> BNB -> dividend pool. Bukan setoran langsung. ---
+        // --- swapTax() repeatedly (one per block) until the tax tokens run out:
+        //     tax tokens -> BNB -> dividend pool. Not a direct deposit. ---
         uint256 swapped;
         for (uint256 i; i < 40; i++) {
             if (token.balanceOf(address(mint)) == 0) break;
@@ -62,7 +62,7 @@ contract ForkDividendTest is BaishouTest {
         assertGt(token.totalDividends(), 0, "BNB hasil swap pajak masuk dividend pool");
         assertEq(feeTreasury.balance, 0, "feeTreasury tetap 0: pajak bukan buat tim");
 
-        // --- Alice (holder) klaim di atas ambang minimum ---
+        // --- Alice (holder) claims above the minimum threshold ---
         uint256 due = token.withdrawableDividendOf(alice);
         assertGe(due, token.MIN_DIVIDEND_CLAIM(), "dividen alice >= ambang 0,001 BNB");
         assertGt(token.withdrawableDividendOf(bob), 0, "bob (pembeli) juga terakru pro-rata");

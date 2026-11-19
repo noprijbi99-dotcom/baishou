@@ -1,21 +1,21 @@
 // SPDX-License-Identifier: MIT
 // BAISHOU - test base + deployment sanity + BAISHOU parameter targets (FINAL).
 //
-// Keputusan test (didokumentasikan, sesuai tugas step 2):
-// - setUp memakai priceDiv = 1 (bukan 1000): costOf(1) == 0,00168 ether
-//   persis seperti dokumen desain; user test di-deal 100 ether (lebih dari
-//   cukup untuk 168 share x 0,00168 = 0,28224 BNB).
-// - v2: setUp memulai sale via startSale() (bukan setPaused(false)) —
-//   saleStartTime == timestamp setUp, failureTime() = start + 14 hari.
-// - Pool open dicapai via _fastForwardToOpen() + 1 mint pemicu (vm.store):
-//   loop 1.000 agen x 168 share terlalu lambat/rapuh. Slot storage diambil
-//   dari `forge inspect AgentMint storage-layout` (totalMinted=0,
-//   pendingBnb=3, pendingTokens=4) dan AgentToken (_balances=0,
-//   _totalSupply=2), MockWBNB (balanceOf=4). Helper menjaga konsistensi:
-//   saldo WBNB kontrak DITAMBAH (deposit asli tetap mendanai payout escrow
-//   saat _open), saldo token pool kontrak DIGANTI agar sama dengan
-//   pendingTokens fiksi (tidak ada sisa token yang ikut ter-swap).
-//   Setelah _open, MockPair.sync() sudah menyetel reserves dari saldo asli.
+// Test decisions (documented, per the step-2 task):
+// - setUp uses priceDiv = 1 (not 1000): costOf(1) == 0,00168 ether
+//   exactly as in the design doc; test users are dealt 100 ether (more than
+//   enough for 168 shares x 0,00168 = 0,28224 BNB).
+// - v2: setUp starts the sale via startSale() (not setPaused(false)) —
+//   saleStartTime == the setUp timestamp, failureTime() = start + 14 days.
+// - Pool open is reached via _fastForwardToOpen() + 1 trigger mint (vm.store):
+//   a loop of 1.000 agents x 168 shares is too slow/fragile. Storage slots are taken
+//   from `forge inspect AgentMint storage-layout` (totalMinted=0,
+//   pendingBnb=3, pendingTokens=4) and AgentToken (_balances=0,
+//   _totalSupply=2), MockWBNB (balanceOf=4). The helper keeps consistency:
+//   the contract's WBNB balance is INCREASED (the real deposit still funds the escrow payout
+//   at _open), the contract's pool token balance is REPLACED to equal the
+//   fictional pendingTokens (no leftover tokens get swapped along).
+//   After _open, MockPair.sync() has set the reserves from the real balances.
 pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
@@ -95,7 +95,7 @@ contract BaishouTest is Test {
         return MockPair(token.pair());
     }
 
-    /// @dev Lihat header file: fiksi 167.999 share tanpa referrer.
+    /// @dev See the file header: a fiction of 167.999 shares without a referrer.
     function _fastForwardToOpen() internal {
         uint256 poolShare = mint.POOL_SHARE();
         uint256 targetTokens = mint.OPEN_TOKENS() - poolShare;
@@ -112,27 +112,27 @@ contract BaishouTest is Test {
         vm.store(address(token), bytes32(uint256(2)), bytes32(token.totalSupply() - oldBal + targetTokens));
     }
 
-    /// @dev Buka pool: fast-forward + 1 mint pemicu (tanpa referrer) oleh
-    ///      `triggerUser` (harus punya Agent ID + kuota). Sesudah ini
-    ///      mint.opened() == true dan reserves() sudah di-sync mock pair.
+    /// @dev Open the pool: fast-forward + 1 trigger mint (no referrer) by
+    ///      `triggerUser` (must hold an Agent ID + quota). After this
+    ///      mint.opened() == true and reserves() are synced with the mock pair.
     function _openPool(address triggerUser) internal {
         _fastForwardToOpen();
         _mintAs(triggerUser, 1, address(0));
         assertTrue(mint.opened(), "pool should be open after trigger mint");
     }
 
-    /// @dev Isi sale sampai OPEN_AT lewat jalur mint NYATA (tanpa vm.store,
-    ///      tanpa openEarly — fungsi itu DIHAPUS di v2): agen generik mint
-    ///      MAX_PER_TX per alamat sampai totalMinted == OPEN_AT; mint
-    ///      terakhir memicu _open() di dalam kontrak. Prasyarat:
-    ///      (OPEN_AT - totalMinted) habis dibagi MAX_PER_TX. Semua mint
-    ///      memakai `referrer` yang sama (address(0) = tanpa referrer ->
-    ///      potongan 5% jatuh ke pool; seed pool 239,904 BNB, treasury
-    ///      tetap 42,336 BNB). Gas metering dimatikan selama loop massal
-    ///      (pola yang sama seperti ForkOpen — eksekusi tetap penuh).
+    /// @dev Fill the sale to OPEN_AT via the REAL mint path (no vm.store,
+    ///      no openEarly — that function was REMOVED in v2): generic agents mint
+    ///      MAX_PER_TX per address until totalMinted == OPEN_AT; the final
+    ///      mint triggers _open() inside the contract. Prerequisite:
+    ///      (OPEN_AT - totalMinted) is exactly divisible by MAX_PER_TX. All mints
+    ///      use the same `referrer` (address(0) = no referrer -> the
+    ///      5% cut falls to the pool; pool seed 239,904 BNB, treasury
+    ///      stays 42,336 BNB). Gas metering is disabled during the mass loop
+    ///      (same pattern as ForkOpen — execution is still complete).
     function _fillToOpen(address referrer) internal {
         uint256 per = mint.MAX_PER_TX();
-        uint256 cost = mint.costOf(per); // flat pre-pool: konstan
+        uint256 cost = mint.costOf(per); // flat pre-pool: constant
         uint256 i;
         vm.pauseGasMetering();
         while (mint.totalMinted() + per <= mint.OPEN_AT()) {
@@ -209,7 +209,7 @@ contract BaishouTest is Test {
         mint.mint{value: cost}(1, address(0), cost);
     }
 
-    // ---- BAISHOU parameter targets (FINAL, 19 Nov 13:22 WIB) --------------
+    // ---- BAISHOU parameter targets (FINAL, 19 Nov 06:22 UTC) --------------
 
     function test_BaishouParameterTargets() public view {
         assertEq(mint.TOTAL_SHARES(), 1_680_000, "total shares 1.680.000");

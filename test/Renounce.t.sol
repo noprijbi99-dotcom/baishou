@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
-// BAISHOU - jalur RENOUNCE + PAUSE (admin minimal, trust-max).
-// Desain FINAL: admin CUMA pause; renounce DITUNDA sampai review independen
-// selesai (flag reviewPassed, bukan fixed H+7); pause TIDAK PERNAH memblokir
-// refund/exit. TIDAK ADA fungsi withdraw/drain di kontrak.
+// BAISHOU - the RENOUNCE + PAUSE path (minimal admin, trust-max).
+// FINAL design: admin is ONLY pause; renounce is DELAYED until the independent review
+// is complete (the reviewPassed flag, not a fixed D+7); pause NEVER blocks
+// refunds/exits. There is NO withdraw/drain function in the contract.
 pragma solidity ^0.8.24;
 
 import {BaishouTest} from "./Baishou.t.sol";
@@ -56,9 +56,9 @@ contract RenounceTest is BaishouTest {
     function test_RenounceReleasesBlocks() public {
         _mintAs(alice, 5, address(0));
         _openPool(carol);
-        // Alamat berkode non-pair yang diblokir admin: transfer ditolak
-        // selama blocks aktif (bukan pair palsu — pair lain tetap ditolak
-        // selamanya oleh aturan satu-pair, bahkan sesudah renounce).
+        // A blocked non-pair coded address: transfers are rejected
+        // while blocks are active (not a fake pair — other pairs are still rejected
+        // forever by the one-pair rule, even after renounce).
         MockWBNB dummy = new MockWBNB();
         address dummyAddr = address(dummy);
         vm.prank(admin);
@@ -66,7 +66,7 @@ contract RenounceTest is BaishouTest {
         vm.prank(alice);
         vm.expectRevert(AgentToken.PoolRejected.selector);
         token.transfer(dummyAddr, 1 ether);
-        // Sesudah review + renounce, blokir dilepas (disableBlocks).
+        // After review + renounce, blocks are released (disableBlocks).
         vm.prank(admin);
         mint.setReviewPassed(true);
         vm.prank(admin);
@@ -78,15 +78,15 @@ contract RenounceTest is BaishouTest {
     }
 
     function test_NoWithdrawFunction() public {
-        // §8b: TIDAK ADA jalan keluar dana selain refund/pool. Buktikan
-        // tidak ada fungsi withdraw/drain yang bisa dipanggil siapa pun.
+        // §8b: there is NO way for funds to leave besides refund/pool. Prove
+        // there is no withdraw/drain function anyone can call.
         (bool okWithdraw,) = address(mint).call(abi.encodeWithSignature("withdraw(uint256)", 1));
         assertFalse(okWithdraw, "tidak ada withdraw(uint256)");
         (bool okDrain,) = address(mint).call(abi.encodeWithSignature("drain()"));
         assertFalse(okDrain, "tidak ada drain()");
         (bool okRescue,) = address(mint).call(abi.encodeWithSignature("rescueTokens(address)", address(token)));
         assertFalse(okRescue, "tidak ada rescueTokens(address)");
-        // Admin pun tidak bisa memanggil jalur apa pun untuk menarik escrow.
+        // Not even the admin can call any path to pull the escrow.
         assertEq(mint.escrowTreasury(), 0, "escrow kosong di awal");
     }
 }

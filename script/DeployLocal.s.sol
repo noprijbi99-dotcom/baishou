@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
-// BAISHOU - deploy stack LOKAL (anvil tanpa fork) untuk smoke leg yang
-// butuh warp waktu (live testnet tidak bisa warp; fork RPC publik tidak
-// punya archive state — "missing trie node"). Bytecode src/ IDENTIK
-// dengan deploy testnet/mainnet; hanya WBNB/Factory/Registry yang mock.
-// Semua role = deployer. Env: DEPLOYER_PRIVATE_KEY.
+// BAISHOU - local deploy stack (anvil, no fork) for smoke legs that
+// need time warps (live testnet cannot warp; public fork RPCs have
+// no archive state — "missing trie node"). The src/ bytecode is IDENTICAL
+// to the testnet/mainnet deploys; only WBNB/Factory/Registry are mocks.
+// All roles = deployer. Env: DEPLOYER_PRIVATE_KEY.
 pragma solidity ^0.8.24;
 
 import {Script, console} from "forge-std/Script.sol";

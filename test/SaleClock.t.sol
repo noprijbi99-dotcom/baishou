@@ -1,20 +1,20 @@
 // SPDX-License-Identifier: MIT
-// BAISHOU - V2 SALE CLOCK tests (fix RT-01, 19 Nov 2026).
-// Jam kegagalan sale v2 berjangkar MULAI SALE (startSale), BUKAN deploy:
-//   (a) tanpa startSale, warp +365 hari: saleFailed() tetap false,
-//       failureTime() tetap 0, mint/freeMint tetap revert Paused —
-//       kontrak boleh menunggu review SELAMANYA tanpa bom waktu.
-//   (b) startSale -> batas 14 hari persis (belum gagal di == deadline,
-//       gagal di +1 detik) -> refund 100% jalan di jam baru. Skenario
-//       gabungan multi-user (deposits + forfeit) di jam baru dicakup
-//       ForkRefund.t.sol — ia membaca failureTime() secara dinamis dan
-//       setUp-nya kini startSale.
-//   (c) startSale dua kali -> AlreadyStarted; non-admin -> NotAdmin.
-//   (d) pool buka di tengah jendela (hari ke-10) -> saleFailed() tetap
-//       false walau timestamp melewati failureTime; mintClosed jatuh
-//       di openedTime + POST_POOL_WINDOW (7 hari), BUKAN +14 hari.
-//   (e) openEarly: DIHAPUS di v2 (compile-level — fungsi itu tidak ada
-//       lagi di AgentMint; test PoolOpen lama untuknya sudah dicabut).
+// BAISHOU - V2 SALE CLOCK tests (RT-01 fix, 19 Nov 2026).
+// The v2 sale failure clock is anchored to SALE START (startSale), NOT deploy:
+//   (a) without startSale, warp +365 days: saleFailed() stays false,
+//       failureTime() stays 0, mint/freeMint still revert Paused —
+//       the contract may wait for review FOREVER with no time bomb.
+//   (b) startSale -> the exact 14-day boundary (not failed at == deadline,
+//       failed at +1 second) -> 100% refunds work on the new clock. The combined
+//       multi-user scenario (deposits + forfeit) on the new clock is covered by
+//       ForkRefund.t.sol — it reads failureTime() dynamically and
+//       its setUp now calls startSale.
+//   (c) startSale twice -> AlreadyStarted; non-admin -> NotAdmin.
+//   (d) the pool opens mid-window (day 10) -> saleFailed() stays
+//       false even though the timestamp passes failureTime; mintClosed falls
+//       at openedTime + POST_POOL_WINDOW (7 days), NOT +14 days.
+//   (e) openEarly: REMOVED in v2 (compile-level — that function no longer
+//       exists in AgentMint; the old PoolOpen test for it has been withdrawn).
 pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
@@ -24,7 +24,7 @@ import {AgentToken} from "../src/AgentToken.sol";
 import {MockWBNB, MockFactory, MockRegistry} from "./mocks/Mocks.sol";
 
 contract SaleClockTest is BaishouTest {
-    // setUp BaishouTest sudah memanggil startSale() di timestamp deploy.
+    // BaishouTest setUp already calls startSale() at the deploy timestamp.
 
     function test_StartSaleTwiceReverts() public {
         assertGt(mint.saleStartTime(), 0, "sale sudah dimulai di setUp");
@@ -61,22 +61,22 @@ contract SaleClockTest is BaishouTest {
 
     function test_OpenMidWindow_KillsFailure_ClosesAtPostPoolWindow() public {
         uint256 start = mint.saleStartTime();
-        vm.warp(start + 10 days); // hari ke-10 dari 14: masih dalam jendela
+        vm.warp(start + 10 days); // day 10 of 14: still within the window
         _openPool(alice);
         assertTrue(mint.opened(), "pool buka hari ke-10");
         uint256 openedAt = mint.openedTime();
-        // Lewati failureTime: saleFailed TIDAK boleh true (pool sudah buka).
+        // Pass failureTime: saleFailed must NOT be true (the pool has opened).
         vm.warp(start + 14 days + 1);
         assertFalse(mint.saleFailed(), "pool sudah buka -> tidak gagal");
         assertFalse(mint.mintClosed(), "belum tutup: openedTime+7d belum lewat");
-        // mintClosed jatuh di openedTime + 7 hari (POST_POOL_WINDOW).
+        // mintClosed falls at openedTime + 7 days (POST_POOL_WINDOW).
         vm.warp(openedAt + 7 days + 1);
         assertTrue(mint.mintClosed(), "tutup di openedTime + 7 hari");
     }
 }
 
-/// @notice Stack TANPA startSale: replika deployment BaishouTest tapi
-///         sale tidak pernah dimulai (paused tetap true dari lahir).
+/// @notice Stack WITHOUT startSale: a replica of the BaishouTest deployment but
+///         the sale never starts (paused stays true from birth).
 contract SaleClockUnstartedTest is Test {
     AgentToken internal token;
     AgentMint internal mint;
@@ -112,7 +112,7 @@ contract SaleClockUnstartedTest is Test {
         registry.setHandle(alice, "alice");
         registry.setOwner(uint256(keccak256(bytes("alice"))), alice);
         vm.deal(alice, 100 ether);
-        // SENGAJA: tidak ada startSale(), tidak ada setPaused(false).
+        // INTENTIONAL: no startSale(), no setPaused(false).
     }
 
     function test_ClockNeverRunsBeforeStart() public {
@@ -120,11 +120,11 @@ contract SaleClockUnstartedTest is Test {
         assertEq(mint.saleStartTime(), 0, "sale belum dimulai");
         assertEq(mint.failureTime(), 0, "tidak ada deadline sebelum start");
         assertGt(mint.deployTime(), 0, "deployTime tetap tercatat (informational)");
-        // Warp SETAHUN penuh: tanpa start, tidak ada bom waktu.
+        // Warp a FULL YEAR: without a start, there is no time bomb.
         vm.warp(block.timestamp + 365 days);
         assertFalse(mint.saleFailed(), "365 hari tanpa start: TIDAK gagal");
         assertEq(mint.failureTime(), 0, "deadline tetap 0");
-        // Mint tetap terblokir pause (bukan SoldOut — jam tidak berjalan).
+        // Mint stays blocked by pause (not SoldOut — the clock is not running).
         uint256 cost = mint.costOf(1);
         vm.prank(alice);
         vm.expectRevert(AgentMint.Paused.selector);
@@ -142,7 +142,7 @@ contract SaleClockUnstartedTest is Test {
         assertEq(start, block.timestamp, "start = saat startSale dipanggil");
         assertEq(mint.failureTime(), start + 14 days, "jendela 14 hari BARU mulai");
         assertFalse(mint.saleFailed(), "tidak gagal di hari mulai");
-        // Sale berfungsi normal sesudah menunggu setahun.
+        // The sale works normally after waiting a year.
         uint256 cost = mint.costOf(1);
         vm.prank(alice);
         mint.mint{value: cost}(1, address(0), cost);

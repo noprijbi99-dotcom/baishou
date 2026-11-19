@@ -1,21 +1,21 @@
 // SPDX-License-Identifier: MIT
-// BAISHOU - WAVE-2 ADVERSARIAL tests (19 Nov 2026, verifikasi putaran ke-2).
+// BAISHOU - WAVE-2 ADVERSARIAL tests (19 Nov 2026, round-2 verification).
 //
-// Cakupan file ini = celah yang BELUM diuji di suite step-2 maupun wave-1:
-//   1. REENTRANCY: kontrak penyerang yang receive()-nya memanggil balik
-//      claimRefund / exit / claimDividend / claimTreasury (termasuk
-//      cross-function refund -> exit). Mandat spek: penyerang TIDAK boleh
-//      menarik lebih dari haknya; setiap panggilan reentrant harus gagal
-//      dan payout luar harus PERSIS sebesar utang, sekali saja.
-//   2. claimTreasury sebelum pool buka (revert NotOpen) dan oleh bukan
-//      treasury (revert NotTreasury) — wave-1/step-2 hanya menguji
-//      claimReferral sebelum buka.
+// Scope of this file = gaps NOT yet tested in the step-2 suite or wave-1:
+//   1. REENTRANCY: an attacker contract whose receive() calls back into
+//      claimRefund / exit / claimDividend / claimTreasury (including
+//      cross-function refund -> exit). Spec mandate: the attacker must NOT be able
+//      to withdraw more than its entitlement; every reentrant call must fail
+//      and the outer payout must be EXACTLY the amount owed, exactly once.
+//   2. claimTreasury before the pool opens (reverts NotOpen) and by a
+//      non-treasury caller (reverts NotTreasury) — wave-1/step-2 only tested
+//      claimReferral before opening.
 //
-// Item brief lain (klaim refund ganda, refund sebelum gagal, exit sesudah
-// pool buka, mint saat pause, mint lewat deadline, freeMint 2x, cap 168,
-// MAX_PER_TX, sweep sebelum/sesudah jendela, pause tidak memblokir refund,
-// self/zero referrer, dividen di bawah minimum) SUDAH ter-cover di suite
-// step-2 — pemetaan lengkapnya ada di VERIFY-2.md, tidak diduplikasi di sini.
+// Other brief items (double refund claims, refund before failure, exit after
+// the pool opens, mint while paused, mint past the deadline, freeMint 2x, the 168 cap,
+// MAX_PER_TX, sweep before/after the window, pause not blocking refunds,
+// self/zero referrer, dividends below the minimum) are ALREADY covered by the step-2
+// suite — the full mapping is in VERIFY-2.md, not duplicated here.
 pragma solidity ^0.8.24;
 
 import {BaishouTest} from "./Baishou.t.sol";
@@ -23,10 +23,10 @@ import {AgentMint} from "../src/AgentMint.sol";
 import {AgentToken} from "../src/AgentToken.sol";
 import {MockWBNB, MockFactory, MockRegistry} from "./mocks/Mocks.sol";
 
-/// @notice Penyerang: Agent ID holder berbentuk kontrak. Saat menerima BNB
-///         (payout), receive() mencoba SATU panggilan reentrant (low-level,
-///         hasil dicatat, kegagalan ditelan supaya payout luar selesai) —
-///         persis pola serangan drain klasik.
+/// @notice Attacker: an Agent ID holder in contract form. When it receives BNB
+///         (payout), receive() attempts ONE reentrant call (low-level,
+///         the result is recorded, failures are swallowed so the outer payout completes) —
+///         exactly the classic drain-attack pattern.
 contract ReentrantClaimer {
     AgentMint public mint;
     AgentToken public token;
@@ -67,7 +67,7 @@ contract ReentrantClaimer {
 
     receive() external payable {
         if (!armed) return;
-        armed = false; // satu tembakan saja, hindari rekursi tak berujung
+        armed = false; // one shot only, avoid unbounded recursion
         reentryAttempts++;
         bool ok;
         if (mode == 1) {
@@ -100,7 +100,7 @@ contract AdversarialTest is BaishouTest {
         atk.doMint(10, mint.costOf(10)); // deposit 0,0168 BNB
         vm.warp(mint.failureTime() + 1);
         assertTrue(mint.saleFailed(), "launch gagal");
-        atk.arm(1); // reenter claimRefund saat payout
+        atk.arm(1); // reenter claimRefund during payout
         uint256 before = address(atk).balance;
         atk.doClaimRefund();
         assertEq(atk.reentryAttempts(), 1, "satu percobaan reentrancy terjadi");
@@ -110,13 +110,13 @@ contract AdversarialTest is BaishouTest {
     }
 
     function test_Reentrancy_ClaimRefundCannotCrossIntoExit() public {
-        // Serangan silang paling tajam: refund 100% sudah dibayar, lalu di
-        // tengah payout mencoba exit(1) untuk menarik 80% LAGI dari share
-        // yang sama (mintedCount belum dikurangi claimRefund).
+        // The sharpest cross attack: the 100% refund has been paid, then in
+        // the middle of the payout it tries exit(1) to withdraw another 80% from the same
+        // shares (mintedCount not yet reduced by claimRefund).
         (ReentrantClaimer atk, uint256 atkId) = _makeAttacker();
         atk.doMint(10, mint.costOf(10));
         vm.warp(mint.failureTime() + 1);
-        atk.arm(2); // reenter exit(1) saat payout refund
+        atk.arm(2); // reenter exit(1) during the refund payout
         uint256 before = address(atk).balance;
         atk.doClaimRefund();
         assertEq(atk.reentryAttempts(), 1, "percobaan cross-reentrancy terjadi");
@@ -128,9 +128,9 @@ contract AdversarialTest is BaishouTest {
     function test_Reentrancy_ExitPaysExactlyOnce() public {
         (ReentrantClaimer atk, uint256 atkId) = _makeAttacker();
         atk.doMint(10, mint.costOf(10));
-        atk.arm(2); // reenter exit(1) saat payout exit parsial
+        atk.arm(2); // reenter exit(1) during the partial-exit payout
         uint256 before = address(atk).balance;
-        atk.doExit(5); // exit 5 dari 10 -> haknya 80% x 5 x 0,00168
+        atk.doExit(5); // exit 5 of 10 -> its entitlement is 80% x 5 x 0,00168
         assertEq(atk.reentryAttempts(), 1, "percobaan reentrancy terjadi");
         assertEq(atk.reentrySuccesses(), 0, "reentrancy exit GAGAL");
         assertEq(address(atk).balance, before + 0.00672 ether, "exit dibayar PERSIS 80% x 5 share");
@@ -139,9 +139,9 @@ contract AdversarialTest is BaishouTest {
     }
 
     function test_Reentrancy_ClaimDividendPaysExactlyOnce() public {
-        // claimDividend TIDAK punya nonReentrant — perlindungannya murni
-        // CEI (withdrawnDividends dicatat SEBELUM transfer). Test ini
-        // membuktikan urutan itu: reenter saat payout -> withdrawable 0.
+        // claimDividend has NO nonReentrant — its protection is purely
+        // CEI (withdrawnDividends is recorded BEFORE the transfer). This test
+        // proves that ordering: reenter during payout -> withdrawable 0.
         (ReentrantClaimer atk,) = _makeAttacker();
         atk.doMint(2, mint.costOf(2));
         _openPool(carol);
@@ -150,7 +150,7 @@ contract AdversarialTest is BaishouTest {
         token.depositDividends{value: 100 ether}();
         uint256 due = token.withdrawableDividendOf(address(atk));
         assertGe(due, token.MIN_DIVIDEND_CLAIM(), "dividen penyerang di atas ambang klaim");
-        atk.arm(3); // reenter claimDividend saat payout
+        atk.arm(3); // reenter claimDividend during payout
         uint256 before = address(atk).balance;
         atk.doClaimDividend();
         assertEq(atk.reentryAttempts(), 1, "percobaan reentrancy terjadi");
@@ -160,11 +160,11 @@ contract AdversarialTest is BaishouTest {
     }
 
     function test_Reentrancy_ClaimTreasuryPaysExactlyOnce() public {
-        // Stack terpisah: treasury = kontrak penyerang. Akrual claimTreasury
-        // hanya ada PASCA-pool (bagian pre-pool dibayar sekali di _open),
-        // jadi: mint pre-pool -> pool buka di OPEN_AT via fill nyata (v2:
-        // openEarly dihapus; penyerang terima 15% pre-pool, receive belum
-        // armed) -> mint pasca-pool -> claimTreasury armed.
+        // Separate stack: treasury = attacker contract. claimTreasury accrual
+        // only exists POST-pool (the pre-pool portion is paid once in _open),
+        // so: mint pre-pool -> pool opens at OPEN_AT via a real fill (v2:
+        // openEarly removed; the attacker receives the 15% pre-pool, receive not yet
+        // armed) -> mint post-pool -> claimTreasury armed.
         MockWBNB wbnb2 = new MockWBNB();
         MockFactory factory2 = new MockFactory();
         MockRegistry registry2 = new MockRegistry();
@@ -191,9 +191,9 @@ contract AdversarialTest is BaishouTest {
         vm.prank(admin);
         mint2.startSale();
 
-        // v2: pool HANYA buka di OPEN_AT — alice mint 167 (kuota per-ID
-        // 168: 1 share disisakan untuk mint pasca-pool di bawah), 999 agen
-        // generik x 168, lalu 1 agen terakhir mint 1 share penutup.
+        // v2: the pool ONLY opens at OPEN_AT — alice mints 167 (per-ID quota
+        // 168: 1 share left for the post-pool mint below), 999 generic agents
+        // x 168, then 1 final agent mints the 1 closing share.
         uint256 cost168 = mint2.costOf(168);
         uint256 cost167 = mint2.costOf(167);
         vm.prank(alice);
@@ -224,7 +224,7 @@ contract AdversarialTest is BaishouTest {
         mint2.mint{value: cost1}(1, address(0), cost1);
         assertEq(mint2.escrowTreasury(), 0.00025704 ether, "akrual pasca-pool 15% x 0,0017136");
 
-        atk.arm(4); // reenter claimTreasury saat payout
+        atk.arm(4); // reenter claimTreasury during payout
         atk.doClaimTreasury();
         assertEq(atk.reentryAttempts(), 1, "percobaan reentrancy terjadi");
         assertEq(atk.reentrySuccesses(), 0, "reentrancy claimTreasury GAGAL");

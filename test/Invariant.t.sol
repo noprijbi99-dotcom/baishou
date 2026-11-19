@@ -1,14 +1,14 @@
 // SPDX-License-Identifier: MIT
-// BAISHOU - INVARIANT tests (forge invariant, satu stack Foundry).
-// Tiga invarian uang yang tidak boleh dilanggar oleh urutan aksi apa pun
-// (mint / exit / freeMint / claimRefund / warp waktu secara acak):
-//   1. Solvabilitas escrow pra-pool: saldo WBNB kontrak >= total
-//      kewajiban refund (sum deposits + forfeitOf semua agen handler).
-//   2. totalMinted tidak pernah melebihi TOTAL_SHARES.
-//   3. totalSupply token tidak pernah melebihi MAX_SUPPLY.
-// Pool TIDAK pernah buka di sini (8 agen x cap 168 = maks 1.344 share
-// << OPEN_AT 168.000), jadi invarian 1 selalu aktif, termasuk sesudah
-// deadline (klaim refund acak ikut menguras escrow secara sah).
+// BAISHOU - INVARIANT tests (forge invariant, one Foundry stack).
+// Three money invariants that no sequence of actions may violate
+// (mint / exit / freeMint / claimRefund / random time warps):
+//   1. Pre-pool escrow solvency: contract WBNB balance >= total
+//      refund obligations (sum of deposits + forfeitOf of all handler agents).
+//   2. totalMinted never exceeds TOTAL_SHARES.
+//   3. token totalSupply never exceeds MAX_SUPPLY.
+// The pool NEVER opens here (8 agents x cap 168 = max 1.344 shares
+// << OPEN_AT 168.000), so invariant 1 is always active, including after the
+// deadline (random refund claims legitimately drain the escrow).
 pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";

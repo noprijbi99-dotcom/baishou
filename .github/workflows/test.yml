@@ -25,8 +25,8 @@ jobs:
       - name: Show Forge version
         run: forge --version
 
-      # forge fmt --check sengaja TIDAK dijalankan: src/ harus tetap identik
-      # byte-per-byte dengan source yang terverifikasi di BscScan + Sourcify.
+      # forge fmt --check is deliberately NOT run: src/ must stay identical
+      # byte-for-byte with the source verified on BscScan + Sourcify.
 
       - name: Run Forge build
         run: forge build --sizes

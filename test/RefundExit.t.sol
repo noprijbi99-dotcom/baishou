@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
-// BAISHOU - jalur REFUND EXIT (keluar sebelum pool buka, kembali 80%).
-// Desain FINAL: minter pre-pool boleh exit sebelum pool buka, terima 80%;
-// 20% forfeit masuk LP KONDIONAL: kalau launch akhirnya GAGAL, exiters
-// dapat 100% kembali (forfeit dikembalikan via claimRefund).
-// Exit hanya selama net shares (terjual - exit) < target 168.000.
+// BAISHOU - the REFUND EXIT path (exit before the pool opens, back 80%).
+// FINAL design: pre-pool minters may exit before the pool opens, receive 80%;
+// the 20% forfeit goes to CONDITIONAL LP: if the launch ultimately FAILS, exiters
+// get 100% back (forfeit returned via claimRefund).
+// Exit only while net shares (sold - exited) < the 168.000 target.
 pragma solidity ^0.8.24;
 
 import {BaishouTest} from "./Baishou.t.sol";
@@ -40,7 +40,7 @@ contract RefundExitTest is BaishouTest {
         mint.exit(10);
         uint256 forfeit = 0.0168 ether * 20 / 100;
         _openPool(carol);
-        // Forfeit ikut jadi likuiditas bonus di atas OPEN_BNB.
+        // Forfeit joins as bonus liquidity on top of OPEN_BNB.
         assertEq(wbnb.balanceOf(address(_pair())), mint.OPEN_BNB() + forfeit, "LP + forfeit");
         (uint256 rBnb,) = mint.reserves();
         assertEq(rBnb, mint.OPEN_BNB() + forfeit, "reserve BNB termasuk forfeit");
@@ -59,12 +59,12 @@ contract RefundExitTest is BaishouTest {
         mint.claimRefund();
         assertEq(alice.balance, before + forfeit, "forfeit 20% kembali");
         assertEq(mint.forfeitOf(alice), 0, "forfeit habis diklaim");
-        // Total kembali: 80% (exit) + 20% (refund) = 100% dari 0,0168.
+        // Total back: 80% (exit) + 20% (refund) = 100% of 0,0168.
     }
 
     function test_ExitDisabledAfterTargetHit() public {
-        // Guard: net shares >= target -> exit tutup (state ini hanya
-        // tercapai via store di test; di produksi pool langsung buka).
+        // Guard: net shares >= target -> exit closes (this state is only
+        // reachable via store in tests; in production the pool opens immediately).
         _mintAs(alice, 10, address(0));
         vm.store(address(mint), bytes32(uint256(0)), bytes32(mint.OPEN_AT()));
         vm.prank(alice);
@@ -101,8 +101,8 @@ contract RefundExitTest is BaishouTest {
     }
 
     function test_ExitReducesEscrowSoTreasuryNotOverpaid() public {
-        // Alice mint 10 dgn referrer bob, lalu exit 10 penuh: escrow
-        // treasury + referral ikut berkurang, jadi _open tidak overpay.
+        // Alice mints 10 with referrer bob, then exits all 10: the treasury
+        // + referral escrow shrinks too, so _open does not overpay.
         _mintAs(alice, 10, bob);
         vm.prank(alice);
         mint.exit(10);
