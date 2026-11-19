@@ -1,14 +1,14 @@
 # BAISHOU — BSC Mainnet (chain 56) — STATUS: ✅ MAINNET LIVE — MINT TETAP TUTUP (paused=true)
 
-**Perintah user:** 19 Nov 2026 14:10 WIB — "deploy aja semua kontraknya tapi
+**Perintah user:** 19 Nov 2026 07:10 UTC — "deploy aja semua kontraknya tapi
 jangan open mint dulu". **Mint TETAP TUTUP** (paused=true adalah state awal;
 script TIDAK memanggil setPaused(false) / openEarly / mint / seed).
-**Deploy selesai 19 Nov 2026 ~14:36 WIB — lihat §7. Lampu hijau parent
+**Deploy selesai 19 Nov 2026 ~07:36 UTC — lihat §7. Lampu hijau parent
 diberikan; broadcast sukses.**
 
-## 0. Blocker pendanaan — SELESAI (jalur b, pilihan user 14:23 WIB)
+## 0. Blocker pendanaan — SELESAI (jalur b, pilihan user 07:23 UTC)
 
-**Pendanaan deployer sempat DIBLOKIR risk engine Binance (~14:17 WIB):**
+**Pendanaan deployer sempat DIBLOKIR risk engine Binance (~07:17 UTC):**
 `baw wallet send` → `{"code": 351703, ... "recipient address is not in your
 address book..."}` — kirim 0,006103075125 BNB ke deployer gagal, tidak ada
 dana bergerak. **Solusi yang dipakai: jalur (b)** — user: "gas aja lu
@@ -104,7 +104,7 @@ saja kosong, deploy revert tanpa broadcast setengah jalan. Sentinel
   0,0024979 BNB (dari 0xad5d…, tx `0xe41a68…33fa`). Biaya broadcast
   sebenarnya 0,0004469663 BNB (gas 8.910.142 @ ~0,05 gwei efektif —
   jauh di bawah estimasi 0,00116 BNB @ 0,1 gwei); **sisa deployer
-  0,0020509337 BNB DIBIARKAN (user 14:25 WIB: "jangan disapu balik
+  0,0020509337 BNB DIBIARKAN (user 07:25 UTC: "jangan disapu balik
   langsung, biarin aja dulu") — JANGAN sapu balik sampai user bilang.**
 - Rencana broadcast (SETELAH lampu hijau parent): `forge script
   script/DeployMainnet.s.sol:DeployBaishouMainnet --rpc-url
@@ -123,7 +123,7 @@ saja kosong, deploy revert tanpa broadcast setengah jalan. Sentinel
    `reviewPassed` sudah ada; `renounce()` terkunci sampai review lolos.
 5. Buka mint — butuh kata user tersendiri (deploy ini TIDAK membuka mint).
 
-## 7. ✅ MAINNET LIVE — deploy selesai 19 Nov 2026 ~14:36 WIB
+## 7. ✅ MAINNET LIVE — deploy selesai 19 Nov 2026 ~07:36 UTC
 
 **Broadcast:** `forge script script/DeployMainnet.s.sol:DeployBaishouMainnet
 --rpc-url https://bsc-dataseed.binance.org/ --broadcast --with-gas-price
@@ -185,14 +185,14 @@ https://bscscan.com/address/0x6cA8489C75641bdf7a0A2Af1Eee4375f52a51F00
   (dompet utama user)
 - `opened()` = **false** ✅
 - Deployer akhir: saldo **0,0020509337 BNB**, nonce 3 — **DIBIARKAN,
-  TIDAK disapu balik** (perintah user 14:25 WIB).
+  TIDAK disapu balik** (perintah user 07:25 UTC).
 
 ## 8. Rekaman broadcast (video X)
 
 - Typescript: `broadcast-mainnet.typescript` (5.900 B — 3 percobaan:
   gagal tip, gagal resume, sukses). Export key dilakukan di shell LUAR,
   tidak terekam.
-- **Audit rahasia SEBELUM publish (aturan AGENTS.md, user 14:28 WIB):
+- **Audit rahasia SEBELUM publish (aturan AGENTS.md, user 07:28 UTC):
   BERSIH** — grep: 0 string 0x+64hex, 0 kata sensitif
   (private_key/mnemonic/apikey/dll); cek nilai key deployer vs isi file:
   False/False (nilai key TIDAK pernah dicetak, hanya True/False).
@@ -210,11 +210,11 @@ https://bscscan.com/address/0x6cA8489C75641bdf7a0A2Af1Eee4375f52a51F00
 ## 9. V2 — CHECKPOINT PRA-BROADCAST (19 Nov 2026 malam) — ✅ BROADCAST SELESAI, lihat §10
 
 **Kenapa v2:** red-team RT-01 — di v1 `failureTime` = deploy + 7 hari
-(26 Nov 2026 14:28:47 WIB); selama mint masih ditutup menunggu review,
+(26 Nov 2026 07:28:47 UTC); selama mint masih ditutup menunggu review,
 jam itu tetap jalan dan v1 bisa hangus sebelum sempat mulai (saldo 0,
 totalMinted 0 — tidak ada dana berisiko). RT-02 — `openEarly` bisa
 membuka pool di bawah target dan mematahkan janji escrow. Keputusan
-user 19 Nov 18:02 WIB: redeploy v2, jendela target **14 HARI sejak
+user 19 Nov 11:02 UTC: redeploy v2, jendela target **14 HARI sejak
 sale start**; semua angka lain identik v1. **v1 (§1–§8) SUPERSEDED
 oleh seksi ini untuk deploy berikutnya.**
 
@@ -307,7 +307,7 @@ registrar `0x60B9262456dE011F7d15a54CdD8c48bAaa8B022F`; WBNB
 
 **STATUS CHECKPOINT: SIAP — broadcast SUDAH dilakukan, hasilnya di §10.**
 
-## 10. ✅ V2 MAINNET LIVE — deploy selesai 19 Nov 2026 ~18:52 WIB
+## 10. ✅ V2 MAINNET LIVE — deploy selesai 19 Nov 2026 ~11:52 UTC
 
 **Broadcast:** SATU percobaan, perintah polos §9 langkah 2 (tanpa flag
 gas — estimasi forge tip 0,05 gwei diterima jaringan kali ini), exit

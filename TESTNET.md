@@ -1,13 +1,13 @@
 # BAISHOU — BSC Testnet (chain 97) — STATUS: ✅ DEPLOYED + SMOKE TEST LULUS
 
-**Tanggal deploy:** 19 Nov 2026, ~14:05 WIB
+**Tanggal deploy:** 19 Nov 2026, ~07:05 UTC
 **Deployer testnet (segar):** `0xad5d51D7eE879C47F288F48559BC1914F771fB62`
 **Saldo tBNB deployer:** 0,3 masuk dari faucet (user) → **0,2888 tersisa** setelah deploy + seed + smoke test (termasuk 0,01 tBNB dikirim ke bob untuk gas).
 **Nonce deployer saat deploy:** 0 — alamat hasil deploy SAMA PERSIS dengan prediksi dry-run §4.
 
 > **KONTRAK LIVE.** Tx hash deploy, alamat, dan hasil smoke test di §6–§7.
 > Blocker faucet §1 sudah lewat (user klaim 0,3 tBNB via faucet resmi +
-> hCaptcha, 13:56 WIB).
+> hCaptcha, 06:56 UTC).
 
 ## 1. Blocker: faucet tBNB tidak bisa diklaim dari VM ini
 
@@ -153,7 +153,7 @@ Lalu verifikasi source + smoke test (belum jalan — menunggu dana):
 
 ## 6. Kontrak live / tx hash / link BscScan
 
-**Deploy: 19 Nov 2026 ~14:05 WIB.** Catatan: broadcast pertama GAGAL
+**Deploy: 19 Nov 2026 ~07:05 UTC.** Catatan: broadcast pertama GAGAL
 (`transaction gas price below minimum: gas tip cap 1, minimum needed
 100000000`) — forge menebak priority fee 1 wei, padahal minimum testnet
 0,1 gwei. Retry dengan `--with-gas-price 1000000000 --priority-gas-price
@@ -198,7 +198,7 @@ Seed registry (6 call, gas total 268.464): `0x629d9f449f2b5208a5048f3147e662e394
 
 ## 7. Smoke test
 
-**Dijalankan 19 Nov 2026 ~14:07 WIB, SEMUA LULUS** (script `/tmp/smoke_test.sh`,
+**Dijalankan 19 Nov 2026 ~07:07 UTC, SEMUA LULUS** (script `/tmp/smoke_test.sh`,
 bukan di repo — key test hanya di variabel shell):
 
 | # | Langkah | Tx | Hasil |
@@ -222,7 +222,7 @@ pembukaan pool (butuh 168.000 share — tidak realistis di testnet),
 `claimReferral()` (butuh pool buka), `renounce()` (gate review — JANGAN
 di testnet), dan Echidna/invariant (belum dijalankan).
 
-## 8. Rotasi key test user (19 Nov 2026 ~14:21 WIB)
+## 8. Rotasi key test user (19 Nov 2026 ~07:21 UTC)
 
 Insiden: saat persiapan smoke test, satu perintah `python3 -c` membaca
 `testnet-test-users.json` dan mencetak isinya ke output tool — termasuk
