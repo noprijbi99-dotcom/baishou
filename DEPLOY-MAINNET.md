@@ -377,3 +377,60 @@ https://bscscan.com/address/0x443eABC5567e1F4838920f74Fc6401B09f93bf53
   typescript (DejaVu Sans Mono font, terminal green, scrolling). Cosmetic
   defects of the v1 class: spinner glyphs render as boxes; the command header line
   is cut off at the right edge.
+
+## 11. ✅ V3 MAINNET LIVE — deployed 19 Nov 2026 ~13:20 UTC
+
+**Why v3:** user order 19 Nov 2026 13:12 UTC. The v2 verified source
+contained one Indonesian comment line; v3 redeploys the identical logic
+from the fully English-cleaned source so every public surface is
+zero-Indonesian. v2 never sold a single share (paused, totalMinted 0) —
+nothing to migrate. The src/ diff vs v2 is comment-only (cleanup commits
+`9d18055`, `f4192de`, `1993d2c`); the compiled bytecode was verified
+byte-identical to the v2 build except the metadata hash (creation +
+runtime, both contracts, compared locally before broadcast).
+
+| Contract | Address | Tx | Gas |
+|---|---|---|---|
+| AgentToken | `0x20e62E10C18b14F36E323835B5FCe6F45FE31c1E` | `0x17e7024b2a09ce76aae2d1c7bbf68b39743dc68d82289b151118408f5ee19314` | 4,843,820 |
+| AgentMint | `0xE69708358EC640C0bc86980893a4Afd01Aff6F9B` | `0x45b2a597ac88edd3619f2964e83e85a78fe95b704c7edcd81779fc0a799c7e13` | 4,037,105 |
+| Pair BAISHOU/WBNB | `0x86b5c0cD0f07d613E7c8b10E10a45BD0D858e4f6` | created inside the AgentToken deploy (0 liquidity — pool opens at 168,000 shares) | — |
+| `token.initialize(mint)` | — | `0xeb28a8bb5bce043e2bd51842b8104bcaaac12075752343d02aaf6e1d4f709f03` | 45,621 |
+
+All 3 txs status 1, block 134,510,220. Total gas: **8,926,546**
+(0.0004463273 BNB @ 0.05 gwei effective) — identical to v2. BscScan:
+https://bscscan.com/address/0x20e62E10C18b14F36E323835B5FCe6F45FE31c1E and
+https://bscscan.com/address/0xE69708358EC640C0bc86980893a4Afd01Aff6F9B
+**These v3 addresses REPLACE the v2 addresses (§10) for all uses.**
+
+**Live state (read via cast, chain 56, after broadcast — ALL AS EXPECTED):**
+- `name()` = `"BAISHOU"`, `symbol()` = `"BAISHOU"`, `totalSupply()` = 0
+- `pair()` = `0x86b5…e4f6`, `minter()` = AgentMint v3
+- `paused()` = **true** ✅ (mint STAYS CLOSED)
+- `saleStartTime()` = **0** ✅, `failureTime()` = **0** ✅, `saleFailed()` = **false** ✅
+- `totalMinted()` = **0** ✅, `opened()` = **false** ✅
+- `costOf(1)` = 1,680,000,000,000,000 wei = **0.00168 BNB** ✅
+- `treasury()` = `feeTreasury()` = `admin()` = `0x3195…8900` ✅ (user's main wallet)
+- Deployer after: balance **0.0011582791 BNB**, nonce 9 — **LEFT PARKED,
+  NOT swept** (standing user order).
+- `startSale` NOT called. The opening is handled by a separate job,
+  rescheduled to **19 Nov 2026 15:00 UTC**.
+
+**Source verification — BOTH exact_match / verified in both places:**
+- **Sourcify: ✅ exact_match BOTH** (creation + runtime) — AgentToken
+  matchId 59523985 (job `9c5667c5-7ea4-4bb3-93d4-2b435489ad86`, verified
+  2026-11-19T13:25:26Z), AgentMint matchId 59524046 (job
+  `7233fc2e-88de-4cc8-9dea-605b585328fb`, verified 2026-11-19T13:26:47Z).
+  The verified source is the English-cleaned source (line 7 now reads
+  "FINAL NUMBERS (user, 19 Nov 06:22 UTC, shares 10x)" — zero Indonesian).
+- **BscScan: ✅ Pass - Verified BOTH** via the Sourcify relay (AgentToken
+  GUID `qwsrx5f7vqt6sj8hrjrwwrrra9getsdaf1mcelwwukhtripimt`, AgentMint GUID
+  `krqyjnpwttljbshjaymu1n4rji12jc1xuuv6wvebzqjyvhayyr`), confirmed via
+  `checkverifystatus` and a `getsourcecode` read (cleaned English source).
+
+**Website:** https://baishou.pages.dev swapped to v3 everywhere (contract
+sections, BscScan links, Board read config, countdown eth_call target);
+countdown `CD_LAUNCH` = **1795100400** (19 Nov 2026 15:00 UTC — the opening
+was rescheduled from 14:00 UTC); llms.txt updated to v3 with the same
+transparency note. Live curl verification: HTTP 200, v3 Mint ×5 / Token ×3 /
+Pair ×2, v2 addresses 0, Indonesian scan (WIB/Jakarta/Indonesia) 0,
+countdown element present.
