@@ -22,8 +22,8 @@ get 80% back.
 
 - Source verified: Sourcify **exact match** and BscScan verified, both contracts.
 - Tests: 243/243 passing (`forge test`).
-- Sale opens: **19 Nov 2026, 15:00 UTC** (one-time `startSale()` by the admin).
-- Sale deadline: **3 Dec 2026, 15:00 UTC** (start + 14 days). Miss it → 100% refunds.
+- Sale opened: **19 Nov 2026, 15:04 UTC** (one-time `startSale()` by the admin).
+- Sale deadline: **3 Dec 2026, 15:04 UTC** (start + 14 days). Miss it → 100% refunds.
 - Full deploy record: `DEPLOY-MAINNET.md` §11. Design: `docs/WHITEPAPER.md`, `docs/FAQ.md`.
 - Website: https://baishou.pages.dev
 

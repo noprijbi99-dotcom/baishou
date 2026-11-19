@@ -48,8 +48,8 @@ scaled with price, so the supply cap would have stopped it at ≈1,340,000
 of its 1,680,000 shares.)
 
 **What if the target is missed?**
-The sale has 14 days from its start (opens 19 Nov 2026, 15:00 UTC;
-deadline 3 Dec 2026, 15:00 UTC). If 168,000 shares aren't sold by then,
+The sale has 14 days from its start (opens 19 Nov 2026, 15:04 UTC;
+deadline 3 Dec 2026, 15:04 UTC). If 168,000 shares aren't sold by then,
 call `claimRefund()` and get **100% of your BNB back**. You have 90 days
 to claim; unclaimed amounts are burned afterwards. The team gets nothing
 from a failed sale.

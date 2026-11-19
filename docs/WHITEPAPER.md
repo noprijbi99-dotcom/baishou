@@ -115,9 +115,9 @@ claims carry the same 168,000,000 tokens per share as paid shares.
 ### 3.5 Sale window and closing
 
 - The sale starts when the admin calls `startSale()` (one time only).
-  BAISHOU's sale opens **19 Nov 2026, 15:00 UTC**.
+  BAISHOU's sale opened **19 Nov 2026, 15:04 UTC**.
 - The target deadline is **14 days** after the start:
-  **3 Dec 2026, 15:00 UTC**. If 168,000 shares are not sold by then, the
+  **3 Dec 2026, 15:04 UTC**. If 168,000 shares are not sold by then, the
   sale has failed (Section 4).
 - The mint ends the moment the 168,000th share is sold and the pool opens
   (Section 3.3). If the target is missed, the mint ends at the deadline
