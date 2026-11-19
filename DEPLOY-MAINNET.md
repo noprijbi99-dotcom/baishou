@@ -206,3 +206,104 @@ https://bscscan.com/address/0x6cA8489C75641bdf7a0A2Af1Eee4375f52a51F00
 - Draf postingan X #3 (mainnet live, 209 karakter) sudah dibuat parent —
   JANGAN dipost sampai deploy terverifikasi live (sudah terverifikasi
   sekarang — §7).
+
+## 9. V2 — CHECKPOINT PRA-BROADCAST (19 Nov 2026 malam) — ⏸ MENUNGGU BROADCAST PARENT
+
+**Kenapa v2:** red-team RT-01 — di v1 `failureTime` = deploy + 7 hari
+(26 Nov 2026 14:28:47 WIB); selama mint masih ditutup menunggu review,
+jam itu tetap jalan dan v1 bisa hangus sebelum sempat mulai (saldo 0,
+totalMinted 0 — tidak ada dana berisiko). RT-02 — `openEarly` bisa
+membuka pool di bawah target dan mematahkan janji escrow. Keputusan
+user 19 Nov 18:02 WIB: redeploy v2, jendela target **14 HARI sejak
+sale start**; semua angka lain identik v1. **v1 (§1–§8) SUPERSEDED
+oleh seksi ini untuk deploy berikutnya.**
+
+### Diff source vs v1 (`git diff e0669d0..HEAD -- src/`)
+
+- HANYA `src/AgentMint.sol` berubah: **+44 / −17 baris**. `AgentToken.sol`
+  byte-identik.
+- `SALE_DURATION` (7 hari dari deploy) → `SALE_WINDOW` = 14 hari +
+  `POST_POOL_WINDOW` = 7 hari (konstanta terpisah).
+- `failureTime` immutable → **view**: `saleStartTime == 0 ? 0 :
+  saleStartTime + SALE_WINDOW`. `deployTime` tetap immutable
+  informational.
+- State baru `saleStartTime` (slot 22 — semua slot v1 tidak bergeser)
+  + fungsi admin satu-kali `startSale()` (set `saleStartTime` +
+  unpause atomik; revert `AlreadyStarted` bila diulang).
+- `saleFailed()` = started && !opened && now > failureTime().
+  `mintClosed()` kini `openedTime + POST_POOL_WINDOW`.
+- **`openEarly` DIHAPUS total** (fungsi + error `CannotOpenEarly` +
+  event `EarlyOpened`). Pool hanya buka di `OPEN_AT` dalam jalur mint.
+- Sisanya identik perilaku: kurva harga, BASE_PRICE 0,00168,
+  OPEN_BNB 225,792, split 15/5, cap 168/Agent ID, free claim 16.800,
+  exit 80%, refund 100%, dividen, `REFUND_WINDOW` 90 hari dari
+  `failureTime()`.
+
+### Verifikasi (semua parent-checkable di repo)
+
+- Suite: **243/243 hijau** seed default DAN `--fuzz-seed 42`;
+  invariant **512 runs hijau** (FOUNDRY_INVARIANT_RUNS=512).
+- Test openEarly diadaptasi ke jalur buka NYATA (fill 1.000 agen):
+  ForkDividend, Wave3Pin W4 (pin baru persis 2_653_293_237_882_583 wei
+  via model bayangan independen), Adversarial claimTreasury
+  (42,336 + 0,00025704 BNB persis). Test baru `SaleClock.t.sol`:
+  tanpa startSale warp +365 hari tetap tidak gagal + mint Paused;
+  batas 14 hari persis; refund 100% di jam baru; open hari ke-10
+  membunuh failure; mintClosed di openedTime+7 hari.
+- Slither re-run: 76 temuan (4H/8M/31L/33I) vs v1 74 — delta +3
+  (incorrect-equality sentinel `saleStartTime == 0` + timestamp ×2,
+  semua by-design) −1 (timestamp openEarly hilang): **0 temuan nyata**
+  (SLITHER-TRIAGE.md § V2 DELTA). Commit patch: `4492e8e`.
+- Testnet v2 LIVE + smoke lulus (TESTNET.md §9): AgentToken
+  `0xd851de404c1c7f42194aefd8f1afa9ca1bada722`, AgentMint
+  `0x48452c8b2947f1b4f3de86dece6c3a16b3e373e5`, Pair
+  `0xC4B47AF896673dac8fC27cc3FcBD30061D625faB` — startSale →
+  failureTime tepat +14 hari; mint/freeMint/exit 80% live; refund 100%
+  terbukti di anvil lokal bytecode identik (fork publik bukan archive).
+
+### Prediksi alamat mainnet v2 (simulasi TANPA broadcast, 19 Nov malam)
+
+Deployer `0x3730f81E6f311ab40222da1393e07Af6F68AffB5` — **nonce 3,
+saldo 0,0020509337 BNB** (dicek read-only SEBELUM dan SESUDAH simulasi:
+tidak berubah → terbukti tidak ada broadcast dari lane ini).
+Kebutuhan gas: aktual v1 0,0004469663 BNB → saldo menutup ~4,6×.
+
+| Kontrak | Alamat prediksi v2 | Nonce |
+|---|---|---|
+| AgentToken | `0x155F36ff76242281c4b29689D51c197296e706a2` | 3 |
+| AgentMint | `0x443eABC5567e1F4838920f74Fc6401B09f93bf53` | 4 |
+| Pair BAISHOU/WBNB | `0xF5BD30CCa572F5f57eeBA508d532B432aDA3A705` | (dari factory) |
+
+Prediksi dari simulasi `forge script DeployMainnet` (tanpa
+`--broadcast`) dan **dicocokkan independen** dengan
+`cast compute-address` nonce 3/4 — hasil identik.
+⚠️ Prediksi hanya berlaku selama nonce deployer tetap 3.
+
+### Config (identik v1)
+
+treasury = feeTreasury = admin = `0x319581821414b324Dd5Db9795e42E7ee3A287900`;
+registrar `0x60B9262456dE011F7d15a54CdD8c48bAaa8B022F`; WBNB
+`0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c`; factory
+`0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73`; PoolManager
+`0xa0FfB9c1CE1Fe56963B0321B32E7A0302114058b`; InfinityVault
+`0x0e3234056AD5b469aDa1AFd30eE3719AC99A361F`; swapFeeBps 30; priceDiv 1.
+
+### Checklist broadcast (untuk parent)
+
+1. Export `DEPLOYER_PRIVATE_KEY` dari `mainnet-deployer-key.json`
+   (`data[0].private_key`) — jangan pernah cetak nilainya.
+2. `forge script script/DeployMainnet.s.sol:DeployBaishouMainnet
+   --rpc-url https://bsc-dataseed.binance.org/ --broadcast`
+   (bila tip default ditolak seperti v1/testnet: tambah
+   `--with-gas-price 1000000000 --priority-gas-price 100000000`).
+   Script TIDAK memanggil startSale — sale lahir tertutup DAN belum
+   dimulai.
+3. Verifikasi state live: alamat == prediksi; `paused()` = true;
+   `saleStartTime()` = 0; `failureTime()` = 0; `saleFailed()` = false;
+   `totalMinted()` = 0; roles == dompet utama; `costOf(1)` = 0,00168.
+4. Verifikasi source Sourcify (jalur v1: exact_match) untuk kedua
+   kontrak.
+5. Sisa deployer dibiarkan (jangan disapu tanpa kata user).
+
+**STATUS CHECKPOINT: SIAP — broadcast BELUM dilakukan (lane ini
+berhenti di sini sesuai brief).**
