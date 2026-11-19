@@ -1,32 +1,22 @@
-# BAISHOU — BSC Mainnet (chain 56) — STATUS: ⏸️ CHECKPOINT — MENUNGGU PERSETUJUAN PARENT
+# BAISHOU — BSC Mainnet (chain 56) — STATUS: ✅ MAINNET LIVE — MINT TETAP TUTUP (paused=true)
 
 **Perintah user:** 19 Nov 2026 14:10 WIB — "deploy aja semua kontraknya tapi
 jangan open mint dulu". **Mint TETAP TUTUP** (paused=true adalah state awal;
 script TIDAK memanggil setPaused(false) / openEarly / mint / seed).
-**Perintah checkpoint:** persiapan selesai → lapor parent → TUNGGU lampu
-hijau. **BELUM ADA BROADCAST.**
+**Deploy selesai 19 Nov 2026 ~14:36 WIB — lihat §7. Lampu hijau parent
+diberikan; broadcast sukses.**
 
-## 0. Blocker saat ini (satu-satunya yang belum selesai)
+## 0. Blocker pendanaan — SELESAI (jalur b, pilihan user 14:23 WIB)
 
-**Pendanaan deployer DIBLOKIR risk engine Binance (19 Nov ~14:25 WIB):**
-`baw wallet send` → `{"success": false, "error": {"code": 351703, "name":
-"SERVICE_ERROR", "message": "This transfer was blocked because the recipient
-address is not in your address book. Add this address in your binance wallet
-app, then retry the transfer."}}`
-
-- Jumlah yang dicoba: **0,006103075125 BNB** → deployer
-  `0x3730f81E6f311ab40222da1393e07Af6F68AffB5` (tidak ada dana yang bergerak;
-  saldo deployer dicek live = **0**).
-- Jalur agen sudah habis: baw TIDAK punya perintah address-book
-  (`baw wallet --help`: status/address/balance/send/cancel/speed-up/
-  tx-history/settings/left-quota/tx-lock/chains/gas-price/resolve-domain/
-  agent-id — tidak ada tambah-alamat); kirim via cast dari dompet utama
-  DILARANG (tidak boleh ekstrak private key dompet utama).
-- **Solusi yang disiapkan (butuh tangan user, 1 tap di aplikasi Binance):**
-  user tambahkan alamat deployer `0x3730f81E6f311ab40222da1393e07Af6F68AffB5`
-  ke address book di aplikasi Binance Wallet, lalu agen retry kirim
-  **0,006103075125 BNB** yang sama. Setelah saldo deployer terverifikasi,
-  parent beri lampu hijau → broadcast.
+**Pendanaan deployer sempat DIBLOKIR risk engine Binance (~14:17 WIB):**
+`baw wallet send` → `{"code": 351703, ... "recipient address is not in your
+address book..."}` — kirim 0,006103075125 BNB ke deployer gagal, tidak ada
+dana bergerak. **Solusi yang dipakai: jalur (b)** — user: "gas aja lu
+pindahin": pindah 0,0025 BNB dari `0xad5d…` (deployer testnet — saldo
+mainnetnya 0,0025 BNB, syarat faucet) ke deployer mainnet `0x3730…` —
+tx `0xe41a687b883e3cc9cb310f052e2476da97b4c83bf7afbe7ee96b308859cb33fa`
+status 1, block 134.462.747. Deployer mainnet kini 0,0024979 BNB, nonce 0,
+prediksi alamat tetap berlaku; broadcast gas rendah 0,1 gwei.
 
 ## 1. Alamat prediksi (dry-run lawan state mainnet live, nonce deployer 0)
 
@@ -110,10 +100,12 @@ saja kosong, deploy revert tanpa broadcast setengah jalan. Sentinel
 - Saldo dompet utama saat hitung: 0,010306309470965425 BNB (dicek live via
   cast). Sisa dompet utama setelah kirim: ≈ 0,004203234345965425 BNB
   (di luar gas kirim baw sendiri, ~21.000 gas).
-- **Status: BELUM TERKIRIM — diblokir 351703 (§0).** Biaya broadcast
-  sebenarnya kemungkinan jauh lebih kecil (di 0,05–0,1 gwei: ~0,0006–
-  0,0012 BNB); sisa dana di deployer bisa disapu balik ke dompet utama
-  setelah deploy, atau disimpan untuk operasi berikut.
+- **Status: TERKIRIM via jalur (b) — lihat §0.** Deployer mainnet didanai
+  0,0024979 BNB (dari 0xad5d…, tx `0xe41a68…33fa`). Biaya broadcast
+  sebenarnya 0,0004469663 BNB (gas 8.910.142 @ ~0,05 gwei efektif —
+  jauh di bawah estimasi 0,00116 BNB @ 0,1 gwei); **sisa deployer
+  0,0020509337 BNB DIBIARKAN (user 14:25 WIB: "jangan disapu balik
+  langsung, biarin aja dulu") — JANGAN sapu balik sampai user bilang.**
 - Rencana broadcast (SETELAH lampu hijau parent): `forge script
   script/DeployMainnet.s.sol:DeployBaishouMainnet --rpc-url
   https://bsc-dataseed.binance.org/ --broadcast --with-gas-price
@@ -130,3 +122,87 @@ saja kosong, deploy revert tanpa broadcast setengah jalan. Sentinel
 4. Audit forensik komunitas Square + review independen — gate
    `reviewPassed` sudah ada; `renounce()` terkunci sampai review lolos.
 5. Buka mint — butuh kata user tersendiri (deploy ini TIDAK membuka mint).
+
+## 7. ✅ MAINNET LIVE — deploy selesai 19 Nov 2026 ~14:36 WIB
+
+**Broadcast:** `forge script script/DeployMainnet.s.sol:DeployBaishouMainnet
+--rpc-url https://bsc-dataseed.binance.org/ --broadcast --with-gas-price
+100000000 --priority-gas-price 50000000 --start-fresh`, di dalam `script`
+(terekam — lihat §8). Dua percobaan pertama GAGAL sebelum ada tx yang
+terkirim (nonce tetap 0, prediksi alamat tidak berubah):
+1. tip 0,01 gwei ditolak jaringan ("gas tip cap 10000000, minimum needed
+   50000000") — diperbaiki ke tip 0,05 gwei;
+2. forge menolak karena run sebelumnya belum selesai ("unfinished
+   operations") — diperbaiki dengan `--start-fresh` (run gagal diarsip).
+Percobaan ketiga: **ONCHAIN EXECUTION COMPLETE & SUCCESSFUL.**
+
+Catatan key file: `mainnet-deployer-key.json` ternyata format envelope baw
+(`{success, data: [{address, public_key, private_key}]}`), BUKAN
+`{private_key}` seperti file testnet — dry-run pertama gagal
+`KeyError: 'private_key'`. Jalur benar:
+`json.load(...)['data'][0]['private_key']`. Alamat dari key diverifikasi
+cocok dengan deployer `0x3730…AffB5` sebelum broadcast. Key TIDAK pernah
+dicetak (hanya alamat yang ditampilkan).
+
+| Kontrak | Alamat (AKTUAL = prediksi §1 persis) | Tx | Gas |
+|---|---|---|---|
+| AgentToken | `0x42c40Bf7E152315d947484d37CC6d0E74d29cD88` | `0x6b788a4b63e3c53b8c817c440ee66c5cb9a487abfbb4a9817af11c81744d864b` | 4.821.292 |
+| AgentMint | `0x6cA8489C75641bdf7a0A2Af1Eee4375f52a51F00` | `0x4d5b4c0fb1e494999579c948cb0d3906fb3002a7dc2c08984bf00eafbdba7171` | 4.043.241 |
+| Pair BAISHOU/WBNB | `0x339b0e7cC4B6dBCe18E63632Ab379F76F9aE5F73` | dibuat saat deploy AgentToken (likuiditas 0 — pool buka di share 168.000) | — |
+| `token.initialize(mint)` | — | `0x7c2a64caeaadc04231d1e573d9ceeb22109c8fe8d477d0ab2dfe93ed5543882d` | 45.609 |
+
+Semua 3 tx status 1, block 134.462.865. Total gas deploy: **8.910.142**
+(0,0004469663 BNB @ ~0,05 gwei efektif). BscScan mainnet:
+https://bscscan.com/address/0x42c40Bf7E152315d947484d37CC6d0E74d29cD88 dan
+https://bscscan.com/address/0x6cA8489C75641bdf7a0A2Af1Eee4375f52a51F00
+
+**Verifikasi source — KEDUANYA exact_match / terverifikasi di kedua tempat:**
+- **Sourcify: ✅ exact_match KEDUANYA** (creation + runtime) —
+  AgentToken job `8d58ffe4-a174-4625-b022-8e246a5eb772` (verifiedAt
+  2026-11-19T07:34:00Z), AgentMint job `7b52e748-c07f-496d-a3e4-d06296b55f41`
+  (verifiedAt 2026-11-19T07:35:00Z). Percobaan pertama forge ke Sourcify
+  sempat timeout di status query — retry berhasil.
+- **BscScan mainnet: ✅ terverifikasi KEDUANYA** (dibaca live via
+  `getsourcecode`): AgentToken ContractName "AgentToken", compiler
+  v0.8.28+commit.7893614a, optimizer runs 200, EVM paris, source 35.446
+  karakter; AgentMint ContractName "AgentMint", compiler sama, source
+  93.942 karakter, checkverifystatus "Pass - Verified" (GUID
+  `y94afrsdr4pvu4ube2pb6gwyjjvw3dzbdqwzyfvpnc1imdtyyu`). AgentToken
+  tercatat "already verified" saat submit — Sourcify exact_match
+  diimpor otomatis BscScan; AgentMint disubmit manual via skrip
+  `/tmp/bscscan_verify.py` (POST standard-JSON pakai surrogate konektor
+  etherscan-v2 — forge tidak bisa pakai surrogate). Berbeda dengan
+  testnet (chain 97 diblokir paket gratis), chain 56 LOLOS.
+
+**State live (dibaca via cast, chain 56, block 134.463.810 — SEMUA SESUAI):**
+- code ada: AgentToken 13.667 B, AgentMint 36.389 B
+- `name()` = `"BAISHOU"`, `symbol()` = `"BAISHOU"`
+- `pair()` = `0x339b…5F73` (sesuai prediksi), `minter()` = AgentMint
+- `paused()` = **true** ✅ (mint TETAP TUTUP)
+- `totalMinted()` = **0** ✅
+- `costOf(1)` = 1.680.000.000.000.000 wei = **0,00168 BNB** ✅
+- `treasury()` = `feeTreasury()` = `admin()` = `0x3195…8900` ✅
+  (dompet utama user)
+- `opened()` = **false** ✅
+- Deployer akhir: saldo **0,0020509337 BNB**, nonce 3 — **DIBIARKAN,
+  TIDAK disapu balik** (perintah user 14:25 WIB).
+
+## 8. Rekaman broadcast (video X)
+
+- Typescript: `broadcast-mainnet.typescript` (5.900 B — 3 percobaan:
+  gagal tip, gagal resume, sukses). Export key dilakukan di shell LUAR,
+  tidak terekam.
+- **Audit rahasia SEBELUM publish (aturan AGENTS.md, user 14:28 WIB):
+  BERSIH** — grep: 0 string 0x+64hex, 0 kata sensitif
+  (private_key/mnemonic/apikey/dll); cek nilai key deployer vs isi file:
+  False/False (nilai key TIDAK pernah dicetak, hanya True/False).
+  Yang tampil hanya alamat publik + tx + log forge. Aman dipublish.
+- MP4: `broadcast-mainnet.mp4` (9,8 MB, 60 dtk, 1280×720, h264 30fps) —
+  render ffmpeg drawtext dari typescript bersih (font DejaVu Sans Mono,
+  hijau terminal, scroll). Frame dicek visual (t=30: log deploy +
+  alamat; t=57: "ONCHAIN EXECUTION COMPLETE & SUCCESSFUL."). Dua cacat
+  kosmetik: baris "Archived ..." terpotong di tepi kanan; satu glyph
+  spinner Braille jadi kotak — tidak mengganggu isi.
+- Draf postingan X #3 (mainnet live, 209 karakter) sudah dibuat parent —
+  JANGAN dipost sampai deploy terverifikasi live (sudah terverifikasi
+  sekarang — §7).

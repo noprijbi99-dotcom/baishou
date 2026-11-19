@@ -1,0 +1,122 @@
+Script started on 2026-11-19 07:26:11+00:00 [COMMAND="forge script script/DeployMainnet.s.sol:DeployBaishouMainnet --rpc-url https://bsc-dataseed.binance.org/ --broadcast --with-gas-price 100000000 --priority-gas-price 10000000" <not executed on terminal>]
+[⠃] Compiling...[⠊] Compiling...[⠒] Compiling...[⠢] Compiling...
+No files changed, compilation skipped
+Script ran successfully.
+
+== Logs ==
+  AgentToken deployed: 0x42c40Bf7E152315d947484d37CC6d0E74d29cD88
+  Pair: 0x339b0e7cC4B6dBCe18E63632Ab379F76F9aE5F73
+  AgentMint deployed: 0x6cA8489C75641bdf7a0A2Af1Eee4375f52a51F00
+  token.initialize(mint) done; minter: 0x6cA8489C75641bdf7a0A2Af1Eee4375f52a51F00
+  deployer: 0x3730f81E6f311ab40222da1393e07Af6F68AffB5
+  treasury/feeTreasury/admin: 0x319581821414b324Dd5Db9795e42E7ee3A287900
+  registrar: 0x60B9262456dE011F7d15a54CdD8c48bAaa8B022F
+  wbnb: 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c
+  factory: 0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73
+  poolManager: 0xa0FfB9c1CE1Fe56963B0321B32E7A0302114058b
+  infinityVault: 0x0e3234056AD5b469aDa1AFd30eE3719AC99A361F
+  MINT STAYS CLOSED: paused=true (initial state). No setPaused(false) called.
+
+## Setting up 1 EVM.
+
+==========================
+
+Chain 56
+
+Estimated gas price: 0.1 gwei
+
+Estimated total gas used for script: 11624905
+
+Estimated amount required: 0.0011624905 BNB
+
+==========================
+
+Transactions saved to: /home/hatch/workspace/baishou/broadcast/DeployMainnet.s.sol/56/run-latest.json
+
+Sensitive values saved to: /home/hatch/workspace/baishou/cache/DeployMainnet.s.sol/56/run-latest.json
+
+Error: Failed to send transaction after 4 attempts Err(server returned an error response: error code -32000: transaction gas price below minimum: gas tip cap 10000000, minimum needed 50000000)
+
+Script done on 2026-11-19 07:27:17+00:00 [COMMAND_EXIT_CODE="1"]
+Script started on 2026-11-19 07:27:26+00:00 [COMMAND="forge script script/DeployMainnet.s.sol:DeployBaishouMainnet --rpc-url https://bsc-dataseed.binance.org/ --broadcast --with-gas-price 100000000 --priority-gas-price 50000000" <not executed on terminal>]
+[⠃] Compiling...[⠊] Compiling...[⠒] Compiling...
+No files changed, compilation skipped
+Script ran successfully.
+
+== Logs ==
+  AgentToken deployed: 0x42c40Bf7E152315d947484d37CC6d0E74d29cD88
+  Pair: 0x339b0e7cC4B6dBCe18E63632Ab379F76F9aE5F73
+  AgentMint deployed: 0x6cA8489C75641bdf7a0A2Af1Eee4375f52a51F00
+  token.initialize(mint) done; minter: 0x6cA8489C75641bdf7a0A2Af1Eee4375f52a51F00
+  deployer: 0x3730f81E6f311ab40222da1393e07Af6F68AffB5
+  treasury/feeTreasury/admin: 0x319581821414b324Dd5Db9795e42E7ee3A287900
+  registrar: 0x60B9262456dE011F7d15a54CdD8c48bAaa8B022F
+  wbnb: 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c
+  factory: 0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73
+  poolManager: 0xa0FfB9c1CE1Fe56963B0321B32E7A0302114058b
+  infinityVault: 0x0e3234056AD5b469aDa1AFd30eE3719AC99A361F
+  MINT STAYS CLOSED: paused=true (initial state). No setPaused(false) called.
+
+## Setting up 1 EVM.
+
+==========================
+
+Chain 56
+
+Estimated gas price: 0.1 gwei
+
+Estimated total gas used for script: 11624905
+
+Estimated amount required: 0.0011624905 BNB
+
+==========================
+Error: the previous broadcast `/home/hatch/workspace/baishou/broadcast/DeployMainnet.s.sol/56/run-latest.json` has unfinished operations; finish it with `--resume`, or pass `--start-fresh` to archive it and broadcast anew
+
+Script done on 2026-11-19 07:27:59+00:00 [COMMAND_EXIT_CODE="1"]
+Script started on 2026-11-19 07:28:01+00:00 [COMMAND="forge script script/DeployMainnet.s.sol:DeployBaishouMainnet --rpc-url https://bsc-dataseed.binance.org/ --broadcast --with-gas-price 100000000 --priority-gas-price 50000000 --start-fresh" <not executed on terminal>]
+[⠃] Compiling...[⠊] Compiling...[⠒] Compiling...[⠢] Compiling...
+No files changed, compilation skipped
+Script ran successfully.
+
+== Logs ==
+  AgentToken deployed: 0x42c40Bf7E152315d947484d37CC6d0E74d29cD88
+  Pair: 0x339b0e7cC4B6dBCe18E63632Ab379F76F9aE5F73
+  AgentMint deployed: 0x6cA8489C75641bdf7a0A2Af1Eee4375f52a51F00
+  token.initialize(mint) done; minter: 0x6cA8489C75641bdf7a0A2Af1Eee4375f52a51F00
+  deployer: 0x3730f81E6f311ab40222da1393e07Af6F68AffB5
+  treasury/feeTreasury/admin: 0x319581821414b324Dd5Db9795e42E7ee3A287900
+  registrar: 0x60B9262456dE011F7d15a54CdD8c48bAaa8B022F
+  wbnb: 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c
+  factory: 0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73
+  poolManager: 0xa0FfB9c1CE1Fe56963B0321B32E7A0302114058b
+  infinityVault: 0x0e3234056AD5b469aDa1AFd30eE3719AC99A361F
+  MINT STAYS CLOSED: paused=true (initial state). No setPaused(false) called.
+
+## Setting up 1 EVM.
+
+==========================
+
+Chain 56
+
+Estimated gas price: 0.1 gwei
+
+Estimated total gas used for script: 11624905
+
+Estimated amount required: 0.0011624905 BNB
+
+==========================
+Archived `/home/hatch/workspace/baishou/cache/DeployMainnet.s.sol/56/run-latest.json.recovery.json` to `/home/hatch/workspace/baishou/cache/DeployMainnet.s.sol/56/run-latest.json.recovery.1795073316765.json`
+Archived `/home/hatch/workspace/baishou/broadcast/DeployMainnet.s.sol/56/run-latest.json` to `/home/hatch/workspace/baishou/broadcast/DeployMainnet.s.sol/56/run-latest.1795073316765.json`
+Archived `/home/hatch/workspace/baishou/cache/DeployMainnet.s.sol/56/run-latest.json` to `/home/hatch/workspace/baishou/cache/DeployMainnet.s.sol/56/run-latest.1795073316765.json`
+
+
+==========================
+
+ONCHAIN EXECUTION COMPLETE & SUCCESSFUL.
+
+Transactions saved to: /home/hatch/workspace/baishou/broadcast/DeployMainnet.s.sol/56/run-latest.json
+
+Sensitive values saved to: /home/hatch/workspace/baishou/cache/DeployMainnet.s.sol/56/run-latest.json
+
+
+Script done on 2026-11-19 07:28:47+00:00 [COMMAND_EXIT_CODE="0"]
