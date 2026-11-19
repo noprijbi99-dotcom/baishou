@@ -40,11 +40,11 @@ refund. If you want out before the pool opens, you get 80% back.
 | Max supply | 510,854,400,000,000 (hard cap, checked on every mint) |
 | Treasury | 15% of sale proceeds — held in escrow, paid ONLY when the pool opens |
 | Referral | 5% flat — held in escrow, paid ONLY when the pool opens |
-| Trading tax | 2% buy / 2% sell (1% burned to DEAD + 1% holder dividends) |
+| Trading tax | 2% buy / 2% sell (sell: 1% burned to DEAD at transfer; collected tax is swapped to BNB for holder dividends) |
 | Failed sale | 100% refund via `claimRefund()` — pull-based, 90-day claim window |
 | Pre-pool exit | 80% back via `exit()`; if the sale later fails, exiters also claim back to 100% |
 | Mint closes | 7 days after the pool opens, or at sellout (1,680,000 shares) |
-| Admin | The admin wallet can: pause, call `startSale()` once, and claim the treasury after the pool opens. The admin can NOT withdraw escrowed buyer funds — no such function exists. |
+| Admin | The admin wallet can: pause, call `startSale()` once, claim the treasury after the pool opens, and block external scam pools (the real pair can never be blocked). The admin can NOT withdraw escrowed buyer funds — no such function exists. |
 
 Team income is ONLY the 15% treasury — and only if the pool opens. If the
 target misses, the team gets 0 and every buyer is refunded in full.

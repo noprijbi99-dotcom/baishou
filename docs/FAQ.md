@@ -57,9 +57,11 @@ No. Zero tokens are pre-minted to the team. The project's only income is
 the 15% treasury share of sale proceeds — paid only if the pool opens.
 
 **What's the tax?**
-2% on buys and 2% on sells: 1% is burned to the DEAD address, 1% goes to
-holder dividends. Dividend amounts are small by construction — it's a
-mechanism, not an income promise.
+2% on buys and 2% on sells. On a sell, 1% is burned to the DEAD address
+immediately; the rest of the tax is collected by the contract and
+periodically swapped into BNB for the holder dividend pool (claimable
+via `claimDividend`). Dividend amounts are small by construction — it's
+a mechanism, not an income promise.
 
 **What's the max supply?**
 510,854,400,000,000 BAISHOU — a hard cap enforced by the contract on
@@ -67,7 +69,8 @@ every mint.
 
 **Can the admin take the escrowed money?**
 No. There is no admin withdraw function. The admin can pause the mint,
-start the sale once, and claim the treasury after the pool opens — and
+start the sale once, claim the treasury after the pool opens, and block
+external scam pools (the real BAISHOU pair can never be blocked) — and
 nothing else. Pause never blocks refunds or exits.
 
 **Where can I verify all this?**

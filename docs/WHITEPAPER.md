@@ -147,11 +147,16 @@ paid **only if and when the pool opens**:
 | Tokens per share | 168,000,000 — fixed for the whole sale |
 | Transfer tax | **2% on buys, 2% on sells** |
 
-### Transfer tax split (per taxed transfer)
+### Transfer tax — how it actually flows
 
-- **1% is burned** — sent to the DEAD address, reducing supply.
-- **1% goes to holder dividends** — distributed to holders through the
-  contract's dividend mechanism (`claimDividend`).
+- **Sells:** 1% is burned immediately (sent to the DEAD address,
+  reducing supply); the other 1% is collected by the AgentMint contract.
+- **Buys:** the full 2% tax is collected by the AgentMint contract
+  (nothing is burned at buy time).
+- Collected tax tokens are periodically swapped for BNB through the pair
+  (`swapTax()`, capped per swap, available once the pool is open) and the
+  BNB is deposited into the token's dividend pool. Holders claim BNB
+  dividends via `claimDividend()`.
 
 A note on scale: with a supply this large, per-holder dividend amounts are
 small by construction. Dividends are a mechanism, not an income promise —
@@ -181,6 +186,9 @@ they are listed here completely:
   treasury to the treasury address.
 - Mark the independent review as passed (`setReviewPassed`), which is the
   gate for any later admin renunciation.
+- **Block a scam pool** (`setPoolBlocked`) — mark an external pool
+  address as blocked for token transfers. The real BAISHOU pair, the
+  contracts themselves, and the treasury address can never be blocked.
 
 The admin **cannot**:
 
