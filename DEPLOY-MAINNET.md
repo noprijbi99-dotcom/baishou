@@ -434,3 +434,62 @@ was rescheduled from 14:00 UTC); llms.txt updated to v3 with the same
 transparency note. Live curl verification: HTTP 200, v3 Mint ×5 / Token ×3 /
 Pair ×2, v2 addresses 0, Indonesian scan (WIB/Jakarta/Indonesia) 0,
 countdown element present.
+
+## 12. ✅ MINT OPENED — startSale() executed 19 Nov 2026 15:04 UTC
+
+**Authorization:** user order "Gas aja bro" (19:36 WIB) for the opening,
+then v3 redeploy (20:12 WIB) and opening moved to 22:00 WIB (20:13 WIB).
+
+**Execution (Binance Agentic Wallet, `baw contract-call`):**
+- Pre-flight (21:57 WIB): devMode enabled (expires 2026-11-26), `paused() = true`,
+  `saleStartTime() = 0`, `failureTime() = 0`, `totalMinted() = 0`, main-wallet
+  balance 0.0166 BNB.
+- Preview at 22:00 WIB: requestId `e7d7ce1381a0439dab4b8c3783c50a10`,
+  parsed as `startSale()` (`0xb66a0e5d`) on AgentMint v3
+  `0xE69708358EC640C0bc86980893a4Afd01Aff6F9B`, simulation clean
+  (`simulationCode 000000000`, no risks). Preview expiry 15:07:15 UTC.
+- First execute attempt failed on a bad flag: `baw contract-call execute`
+  does NOT accept `--binanceChainId` (`error: unknown option`). Nothing was
+  sent; on-chain state re-checked (still `saleStartTime = 0`).
+- Retry with `baw contract-call execute --requestId <id> --json`:
+  status `BROADCASTED`, orderId `26111900002066661491`.
+
+**On-chain result (verified from the receipt + fresh reads):**
+
+| Field | Value |
+|---|---|
+| startSale tx | `0x045725d3995dcfb365442bd42587e41a3b42421817256c800fa295d749715ac1` |
+| Block | 134524066, status 1 (success) |
+| From → To | `0x319581821414b324Dd5Db9795e42E7ee3A287900` → AgentMint v3 `0xE69708358EC640C0bc86980893a4Afd01Aff6F9B` |
+| Gas used | 45,933 @ 0.072473727 gwei effective = **0.0000033289 BNB** |
+| `paused()` | `false` |
+| `saleStartTime()` | 1795100652 = **19 November 2026, 15:04:12 UTC** (22:04:12 WIB) |
+| `failureTime()` | 1796310252 = **3 December 2026, 15:04:12 UTC** (22:04:12 WIB) |
+| Window | 1,209,600 s = 14 days exactly ✅ |
+| `totalMinted()` | 0 |
+
+The sale landed 4 minutes after the 15:00 UTC target (preview + the
+flag-fix retry); the deadline is therefore 15:04 UTC on 3 Dec, not 15:00.
+Free-claim window runs until the deadline or until all 16,800 free shares
+are claimed.
+
+**Recording:** `startsale-2200.typescript` (full session: BEFORE reads,
+preview, the failed first execute, the retry, AFTER reads, closing lines).
+**Video:** `startsale-2200.mp4` (67 s, 1280×720, h264 30fps) — title card 3 s
++ scrolling terminal render of the session + end card 4 s. Secret audit:
+0 sensitive words; the only 64-hex strings are the public startSale tx
+hash (shown twice) — public on-chain data, not a secret. Render text
+contains zero WIB/Indonesian references (the one spoken "22:00 WIB" line
+was rendered as "15:00 UTC" for the public cut; the raw typescript keeps
+the original). Frames checked at t=1/25/50/65.
+
+**Website + llms.txt:** artifact `baishou` edited (EN + ZH): status strip →
+mint LIVE, the three TBD launch fields filled from chain values, mint state
+→ Open, trust lede/note, simulator/how-to/referral notes updated; countdown
+element and its JS untouched (switches to the deadline countdown from
+on-chain state on its own). `llms.txt` STATUS section → LIVE with start,
+deadline, tx hash and block, in UTC. Deployed via artifact export →
+`baishou-pages/index.html` → `wrangler pages deploy` (project `baishou`).
+Live verification: https://baishou.pages.dev (LIVE status + deadline text,
+countdown present, v3 addresses, zero WIB/Indonesian text) and
+https://baishou.pages.dev/llms.txt.
