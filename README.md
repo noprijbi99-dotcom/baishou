@@ -2,9 +2,9 @@
 
 > **Same price. Same cap. Same rules.**
 
-Fair mint untuk pemegang Binance Agent ID, tanpa alokasi tim: 16.800 share
-pertama 0,00168 BNB dapat 168.000 token tetap. Harga naik max 2x (bukan 8x).
-Kalau target 16.800 share tidak tercapai dalam 7 hari, uang kembali 100%.
+Fair mint untuk pemegang Binance Agent ID, tanpa alokasi tim: 168.000 share
+pertama 0,00168 BNB dapat 168.000.000 token tetap. Harga naik max 2x (bukan 8x).
+Kalau target 168.000 share tidak tercapai dalam 7 hari, uang kembali 100%.
 Kalau mau keluar sebelum pool buka, kembali 80%.
 
 ⚠️ **STATUS: DRAFT — BUKAN KONTRAK FINAL. JANGAN DEPLOY.**
@@ -19,20 +19,21 @@ Sumber kebenaran desain: `~/workspace/launchpad-research/POLA-BARU-ARUNIKA.md`
 
 | Parameter | Nilai |
 |---|---|
-| Total shares | 168.000 |
-| Pre-pool | 16.800 share @ 0,00168 BNB flat |
-| Token/share | 168.000 (pool terima 134.400/share) |
-| Pool open | Share 16.800: 22,5792 BNB + 2,25792 miliar token, LP ke DEAD |
-| Kurva pasca-pool | Epoch +2% per 1.680 share, cap 0,00336 BNB (2x), LINEAR |
-| Free | 1.680 share @ 16.800 token (1 per Agent ID, first-come) |
+| Total shares | 1.680.000 |
+| Pre-pool | 168.000 share @ 0,00168 BNB flat |
+| Token/share | 168.000.000 (pool terima 134.400.000/share) |
+| Pool open | Share 168.000: 225,792 BNB + 22,5792 triliun token, LP ke DEAD |
+| Kurva pasca-pool | Epoch +2% per 16.800 share, cap 0,00336 BNB (2x), LINEAR |
+| Free | 16.800 share @ 168.000.000 token (1 per Agent ID, first-come) |
 | Cap | 168 share per alamat (tim sama) |
-| Gate | 24 jam Agent ID-only, max 8.400 share, lalu semua wallet |
+| Gate | Agent ID-only selama penjualan penuh; wallet biasa beli secondary setelah pool buka |
+| Max supply | 510,8544 triliun (hard cap kontrak) |
 | Treasury | 15% — dibayar SAAT pool buka (escrow), bukan instan |
 | Referral | 5% flat — dibayar SAAT pool buka (escrow) |
 | Pajak trading | 2% beli / 2% jual (1% burn + 1% dividen holder); tim 0% dari pajak |
 | Refund gagal | 100% via klaim PULL, jendela 90 hari, sisa dibakar ke DEAD |
 | Exit pre-pool | Kembali 80%; 20% forfeit → LP (gagal = 100% balik ke exiters) |
-| Mint tutup | 7 hari setelah pool buka ATAU 168.000 share |
+| Mint tutup | 7 hari setelah pool buka ATAU 1.680.000 share |
 | Admin | Cuma pause; renounce SETELAH review independen selesai |
 | Deposit refundable | Fase 2 |
 

@@ -1,16 +1,25 @@
 // SPDX-License-Identifier: MIT
-// BAISHOU - test base + deployment sanity + BAISHOU parameter targets.
+// BAISHOU - test base + deployment sanity + BAISHOU parameter targets (FINAL).
 //
-// Status: KERANGKA. Tests marked vm.skip encode the BAISHOU design targets
-// (POLA-BARU-ARUNIKA.md §3/§10, Opsi B) and run only after the fork is
-// parameterised. Tests WITHOUT vm.skip must pass against the fork base now;
-// they lock the wiring and the behaviour the final contract must KEEP.
+// Keputusan test (didokumentasikan, sesuai tugas step 2):
+// - setUp memakai priceDiv = 1 (bukan 1000): costOf(1) == 0,00168 ether
+//   persis seperti dokumen desain; user test di-deal 100 ether (lebih dari
+//   cukup untuk 168 share x 0,00168 = 0,28224 BNB).
+// - Pool open dicapai via _fastForwardToOpen() + 1 mint pemicu (vm.store):
+//   loop 1.000 agen x 168 share terlalu lambat/rapuh. Slot storage diambil
+//   dari `forge inspect AgentMint storage-layout` (totalMinted=0,
+//   pendingBnb=3, pendingTokens=4) dan AgentToken (_balances=0,
+//   _totalSupply=2), MockWBNB (balanceOf=4). Helper menjaga konsistensi:
+//   saldo WBNB kontrak DITAMBAH (deposit asli tetap mendanai payout escrow
+//   saat _open), saldo token pool kontrak DIGANTI agar sama dengan
+//   pendingTokens fiksi (tidak ada sisa token yang ikut ter-swap).
+//   Setelah _open, MockPair.sync() sudah menyetel reserves dari saldo asli.
 pragma solidity ^0.8.24;
 
 import {Test} from "forge-std/Test.sol";
 import {AgentMint} from "../src/AgentMint.sol";
 import {AgentToken} from "../src/AgentToken.sol";
-import {MockWBNB, MockFactory, MockRegistry} from "./mocks/Mocks.sol";
+import {MockWBNB, MockFactory, MockRegistry, MockPair} from "./mocks/Mocks.sol";
 
 contract BaishouTest is Test {
     AgentToken internal token;
@@ -22,7 +31,6 @@ contract BaishouTest is Test {
     address internal admin = makeAddr("admin");
     address internal treasury = makeAddr("treasury");
     address internal feeTreasury = makeAddr("feeTreasury");
-    address internal quotaSigner = makeAddr("quotaSigner");
     address internal poolManager = makeAddr("poolManager");
     address internal infinityVault = makeAddr("infinityVault");
     address internal alice = makeAddr("alice");
@@ -49,18 +57,14 @@ contract BaishouTest is Test {
             treasury: treasury,
             feeTreasury: feeTreasury,
             admin: admin,
-            quotaSigner: quotaSigner,
             wbnb: address(wbnb),
             swapFeeBps: 30,
             unblockable: new address[](0),
-            priceDiv: 1000,
-            daySeconds: 86400,
-            dayOffset: 0
+            priceDiv: 1
         });
         mint = new AgentMint(c);
         token.initialize(address(mint));
 
-        // Agent IDs for the test users (handle + owner, see Mocks.sol).
         registry.setHandle(alice, "alice");
         registry.setOwner(ALICE_ID, alice);
         registry.setHandle(bob, "bob");
@@ -77,7 +81,45 @@ contract BaishouTest is Test {
         mint.setPaused(false);
     }
 
-    // ---- Wiring: must pass against the fork base now -----------------------
+    // ---- Helpers -----------------------------------------------------------
+
+    function _mintAs(address user, uint256 shares, address referrer) internal {
+        uint256 cost = mint.costOf(shares);
+        vm.prank(user);
+        mint.mint{value: cost}(shares, referrer, cost);
+    }
+
+    function _pair() internal view returns (MockPair) {
+        return MockPair(token.pair());
+    }
+
+    /// @dev Lihat header file: fiksi 167.999 share tanpa referrer.
+    function _fastForwardToOpen() internal {
+        uint256 poolShare = mint.POOL_SHARE();
+        uint256 targetTokens = mint.OPEN_TOKENS() - poolShare;
+        uint256 targetBnb = mint.OPEN_BNB() - mint.BASE_PRICE() * 85 / 100;
+        vm.store(address(mint), bytes32(uint256(0)), bytes32(mint.OPEN_AT() - 1));
+        vm.store(address(mint), bytes32(uint256(3)), bytes32(targetBnb));
+        vm.store(address(mint), bytes32(uint256(4)), bytes32(targetTokens));
+        bytes32 wbnbSlot = keccak256(abi.encode(address(mint), uint256(4)));
+        uint256 wbnbBal = wbnb.balanceOf(address(mint)) + targetBnb;
+        vm.store(address(wbnb), wbnbSlot, bytes32(wbnbBal));
+        bytes32 tokSlot = keccak256(abi.encode(address(mint), uint256(0)));
+        uint256 oldBal = token.balanceOf(address(mint));
+        vm.store(address(token), tokSlot, bytes32(targetTokens));
+        vm.store(address(token), bytes32(uint256(2)), bytes32(token.totalSupply() - oldBal + targetTokens));
+    }
+
+    /// @dev Buka pool: fast-forward + 1 mint pemicu (tanpa referrer) oleh
+    ///      `triggerUser` (harus punya Agent ID + kuota). Sesudah ini
+    ///      mint.opened() == true dan reserves() sudah di-sync mock pair.
+    function _openPool(address triggerUser) internal {
+        _fastForwardToOpen();
+        _mintAs(triggerUser, 1, address(0));
+        assertTrue(mint.opened(), "pool should be open after trigger mint");
+    }
+
+    // ---- Wiring ------------------------------------------------------------
 
     function test_DeploymentWiring() public view {
         assertTrue(address(token) != address(0), "token not deployed");
@@ -95,8 +137,6 @@ contract BaishouTest is Test {
         vm.prank(alice);
         mint.mint{value: cost}(1, address(0), cost);
         assertEq(mint.totalMinted(), 1, "totalMinted");
-        // Fork value (AIC USER_SHARE). After BAISHOU parameterisation this
-        // must become 168_000 ether - see test_BaishouParameterTargets.
         assertEq(token.balanceOf(alice), mint.USER_SHARE(), "user tokens");
     }
 
@@ -139,28 +179,62 @@ contract BaishouTest is Test {
         mint.mint{value: cost}(1, address(0), cost);
     }
 
-    // ---- BAISHOU parameter targets (Opsi B) - skipped until final --------
-    // Un-skip one by one as the fork is parameterised; each must turn green.
+    // ---- BAISHOU parameter targets (FINAL, 19 Nov 13:22 WIB) --------------
 
-    function test_BaishouParameterTargets() public {
-        vm.skip(true, "TODO: parameterisasi BAISHOU - konstanta masih AIC");
-        assertEq(mint.TOTAL_SHARES(), 168_000, "total shares 168.000");
-        assertEq(mint.OPEN_AT(), 16_800, "pre-pool 16.800 share");
-        assertEq(mint.BASE_PRICE(), 0.00168 ether, "harga flat 0,00168 BNB");
-        assertEq(mint.USER_SHARE(), 168_000 ether, "168.000 token/share");
-        assertEq(mint.POOL_SHARE(), 134_400 ether, "134.400 token/share ke pool");
-        assertEq(mint.OPEN_TOKENS(), 16_800 * 134_400 ether, "pool open 2,25792 miliar token");
+    function test_BaishouParameterTargets() public view {
+        assertEq(mint.TOTAL_SHARES(), 1_680_000, "total shares 1.680.000");
+        assertEq(mint.OPEN_AT(), 168_000, "pre-pool 168.000 share");
+        assertEq(mint.PROD_BASE_PRICE(), 0.00168 ether, "harga flat 0,00168 BNB");
+        assertEq(mint.BASE_PRICE(), 0.00168 ether, "priceDiv=1: BASE_PRICE = harga prod");
+        assertEq(mint.PROD_OPEN_BNB(), 225.792 ether, "pool open 225,792 BNB");
+        assertEq(mint.OPEN_BNB(), 225.792 ether, "priceDiv=1: OPEN_BNB = prod");
+        assertEq(mint.USER_SHARE(), 168_000_000 ether, "168.000.000 token/share");
+        assertEq(mint.POOL_SHARE(), 134_400_000 ether, "134.400.000 token/share ke pool");
+        assertEq(mint.OPEN_TOKENS(), 22_579_200_000_000 ether, "pool open 22,5792 triliun token");
+        assertEq(mint.MAX_SUPPLY(), 510_854_400_000_000 ether, "max supply 510,8544 triliun");
         assertEq(mint.TREASURY_BPS(), 1_500, "treasury 15%");
-        assertEq(mint.MINT_PRICE_BPS(), 10_000, "tepat 168.000/share, tanpa selisih 1%");
+        assertEq(mint.REFERRAL_BPS(), 500, "referral 5% flat");
+        assertEq(mint.MINT_PRICE_BPS(), 10_000, "tepat 168.000.000/share, tanpa selisih 1%");
         assertEq(mint.MAX_PER_TX(), 168, "max 168 share/tx = cap wallet");
         assertEq(mint.BASE_PER_ID(), 168, "cap 168 share per alamat");
         assertEq(mint.INVITE_QUOTA(), 0, "kuota invite +2 DIHAPUS");
+        assertEq(mint.FREE_SHARES(), 16_800, "free 16.800 share");
+        assertEq(mint.EPOCH_SHARES(), 16_800, "epoch 16.800 share");
     }
 
-    function test_BaishouTokenTaxTargets() public {
-        vm.skip(true, "TODO: parameterisasi BAISHOU - pajak token masih AIC");
+    function test_BaishouTokenTaxTargets() public view {
         assertEq(token.BUY_TAX_BPS(), 200, "beli 2%");
         assertEq(token.SELL_BURN_BPS(), 100, "jual 1% burn");
         assertEq(token.SELL_KEEP_BPS(), 100, "jual 1% dividen pool (bukan feeTreasury)");
+        assertEq(token.MAX_SUPPLY(), 510_854_400_000_000 ether, "token max supply = mint cap");
+        assertEq(token.MIN_DIVIDEND_CLAIM(), 0.001 ether, "min klaim dividen 0,001 BNB");
+    }
+
+    function test_RegistryRegistersOnMint() public {
+        assertFalse(mint.isParticipant(ALICE_ID), "belum peserta sebelum mint");
+        assertEq(mint.participantCount(), 0, "0 peserta awal");
+        _mintAs(alice, 1, address(0));
+        assertTrue(mint.isParticipant(ALICE_ID), "terdaftar saat pertama mint");
+        assertEq(mint.participantCount(), 1, "1 peserta");
+        _mintAs(alice, 1, address(0));
+        assertEq(mint.participantCount(), 1, "mint ke-2 ID sama tidak dobel");
+        _mintAs(bob, 1, address(0));
+        assertEq(mint.participantCount(), 2, "ID baru menambah peserta");
+    }
+
+    function test_DeployTimeAndSaleFailed() public view {
+        assertEq(mint.deployTime(), block.timestamp, "deployTime = waktu deploy");
+        assertEq(mint.failureTime(), block.timestamp + 7 days, "failure = deploy + 7 hari");
+        assertFalse(mint.saleFailed(), "belum gagal saat deploy");
+        assertFalse(mint.mintClosed(), "mint belum tutup saat deploy");
+    }
+
+    function test_SaleFailedAfterDeadline() public {
+        vm.warp(vm.getBlockTimestamp() + 7 days + 1);
+        assertTrue(mint.saleFailed(), "gagal kalau deadline lewat & pool belum buka");
+        uint256 cost = mint.costOf(1);
+        vm.prank(alice);
+        vm.expectRevert(AgentMint.SoldOut.selector);
+        mint.mint{value: cost}(1, address(0), cost);
     }
 }

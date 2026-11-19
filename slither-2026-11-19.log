@@ -1,0 +1,422 @@
+
+Detector: arbitrary-send-eth
+AgentMint._payOrOwe(address,uint256) (src/AgentMint.sol#682-689) sends eth to arbitrary user
+	Dangerous calls:
+	- (ok,None) = to.call{value: amount}() (src/AgentMint.sol#684)
+AgentMint._pay(address,uint256) (src/AgentMint.sol#691-695) sends eth to arbitrary user
+	Dangerous calls:
+	- (ok,None) = to.call{value: amount}() (src/AgentMint.sol#693)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#functions-that-send-ether-to-arbitrary-destinations
+
+Detector: reentrancy-eth
+Reentrancy in AgentMint._mintShares(uint256,uint256,uint256,address) (src/AgentMint.sol#433-495):
+	External calls:
+	- token.mint(address(this),POOL_SHARE) (src/AgentMint.sol#466)
+	- token.mint(msg.sender,userT) (src/AgentMint.sol#468)
+	- _open(pendingBnb + forfeitPool,OPEN_TOKENS) (src/AgentMint.sol#473)
+		- IWrappedBNB(wbnb).withdraw(amount) (src/AgentMint.sol#683)
+		- (ok,None) = to.call{value: amount}() (src/AgentMint.sol#684)
+		- lp = pair.mint(DEAD) (src/AgentMint.sol#539)
+		- token.enableTrading() (src/AgentMint.sol#540)
+		- pair.sync() (src/AgentMint.sol#541)
+	External calls sending eth:
+	- _open(pendingBnb + forfeitPool,OPEN_TOKENS) (src/AgentMint.sol#473)
+		- (ok,None) = to.call{value: amount}() (src/AgentMint.sol#684)
+	State variables written after the call(s):
+	- deposits[msg.sender] += pay (src/AgentMint.sol#461)
+	AgentMint.deposits (src/AgentMint.sol#109) can be used in cross function reentrancies:
+	- AgentMint.deposits (src/AgentMint.sol#109)
+	- escrowTreasury += treasuryCut (src/AgentMint.sol#452)
+	AgentMint.escrowTreasury (src/AgentMint.sol#105) can be used in cross function reentrancies:
+	- AgentMint.escrowTreasury (src/AgentMint.sol#105)
+	- pendingBnb += poolPart (src/AgentMint.sol#464)
+	AgentMint.pendingBnb (src/AgentMint.sol#99) can be used in cross function reentrancies:
+	- AgentMint.pendingBnb (src/AgentMint.sol#99)
+	- pendingTokens += POOL_SHARE (src/AgentMint.sol#465)
+	AgentMint.pendingTokens (src/AgentMint.sol#100) can be used in cross function reentrancies:
+	- AgentMint.pendingTokens (src/AgentMint.sol#100)
+	- referralAccrued[refAddr] += referralCut (src/AgentMint.sol#455)
+	AgentMint.referralAccrued (src/AgentMint.sol#107) can be used in cross function reentrancies:
+	- AgentMint.referralAccrued (src/AgentMint.sol#107)
+	- totalMinted = first + shares - 1 (src/AgentMint.sol#481)
+	AgentMint.totalMinted (src/AgentMint.sol#94) can be used in cross function reentrancies:
+	- AgentMint.costOf(uint256) (src/AgentMint.sol#227-235)
+	- AgentMint.mintClosed() (src/AgentMint.sol#252-254)
+	- AgentMint.totalMinted (src/AgentMint.sol#94)
+	- totalPaid += pay (src/AgentMint.sol#460)
+	AgentMint.totalPaid (src/AgentMint.sol#95) can be used in cross function reentrancies:
+	- AgentMint.totalPaid (src/AgentMint.sol#95)
+Reentrancy in AgentMint._mintWithBnb(uint256,address,uint256) (src/AgentMint.sol#378-391):
+	External calls:
+	- IWrappedBNB(wbnb).deposit{value: cost}() (src/AgentMint.sol#383)
+	- _mintShares(id,shares,cost,referrer) (src/AgentMint.sol#385)
+		- IWrappedBNB(wbnb).withdraw(amount) (src/AgentMint.sol#683)
+		- token.mint(address(pair),p.addT) (src/AgentMint.sol#522)
+		- pair.mint(DEAD) (src/AgentMint.sol#523)
+		- (ok,None) = to.call{value: amount}() (src/AgentMint.sol#684)
+		- pair.sync() (src/AgentMint.sol#524)
+		- lp = pair.mint(DEAD) (src/AgentMint.sol#539)
+		- token.enableTrading() (src/AgentMint.sol#540)
+		- pair.sync() (src/AgentMint.sol#541)
+		- token.mint(address(this),POOL_SHARE) (src/AgentMint.sol#466)
+		- token.mint(msg.sender,userT) (src/AgentMint.sol#468)
+		- token.mint(msg.sender,toUser) (src/AgentMint.sol#484)
+		- this.swapTaxSelf() (src/AgentMint.sol#490-493)
+	External calls sending eth:
+	- IWrappedBNB(wbnb).deposit{value: cost}() (src/AgentMint.sol#383)
+	- _mintShares(id,shares,cost,referrer) (src/AgentMint.sol#385)
+		- (ok,None) = to.call{value: amount}() (src/AgentMint.sol#684)
+	State variables written after the call(s):
+	- _mintShares(id,shares,cost,referrer) (src/AgentMint.sol#385)
+		- mintedCount[id] += shares (src/AgentMint.sol#440)
+	AgentMint.mintedCount (src/AgentMint.sol#123) can be used in cross function reentrancies:
+	- AgentMint.mintedCount (src/AgentMint.sol#123)
+	- _mintShares(id,shares,cost,referrer) (src/AgentMint.sol#385)
+		- openedTime = block.timestamp (src/AgentMint.sol#529)
+	AgentMint.openedTime (src/AgentMint.sol#101) can be used in cross function reentrancies:
+	- AgentMint.mintClosed() (src/AgentMint.sol#252-254)
+	- AgentMint.opened() (src/AgentMint.sol#242-244)
+	- AgentMint.openedTime (src/AgentMint.sol#101)
+	- _mintShares(id,shares,cost,referrer) (src/AgentMint.sol#385)
+		- totalMinted = first + shares - 1 (src/AgentMint.sol#481)
+	AgentMint.totalMinted (src/AgentMint.sol#94) can be used in cross function reentrancies:
+	- AgentMint.costOf(uint256) (src/AgentMint.sol#227-235)
+	- AgentMint.mintClosed() (src/AgentMint.sol#252-254)
+	- AgentMint.totalMinted (src/AgentMint.sol#94)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#reentrancy-vulnerabilities-1
+
+Detector: divide-before-multiply
+AgentMint.costOf(uint256) (src/AgentMint.sol#227-235) performs a multiplication on the result of a division:
+	- unit = BASE_PRICE / 100 (src/AgentMint.sol#231)
+	- cost += priceUnits(n + 1 + i) * unit (src/AgentMint.sol#233)
+AgentMint._mintShares(uint256,uint256,uint256,address) (src/AgentMint.sol#433-495) performs a multiplication on the result of a division:
+	- unit = BASE_PRICE / 100 (src/AgentMint.sol#447)
+	- pay = priceUnits(n) * unit (src/AgentMint.sol#449)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#divide-before-multiply
+
+Detector: incorrect-equality
+AgentMint._swapTax() (src/AgentMint.sol#653-669) uses a dangerous strict equality:
+	- amount == 0 (src/AgentMint.sol#658)
+AgentMint.swapTax() (src/AgentMint.sol#641-645) uses a dangerous strict equality:
+	- lastTaxSwapBlock == block.number (src/AgentMint.sol#643)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#dangerous-strict-equalities
+
+Detector: unused-return
+AgentMint.reserves() (src/AgentMint.sol#256-259) ignores return value by (r0,r1,None) = pair.getReserves() (src/AgentMint.sol#257)
+AgentMint._settle(AgentMint.Pool) (src/AgentMint.sol#520-525) ignores return value by pair.mint(DEAD) (src/AgentMint.sol#523)
+AgentMint._swapOn(IPancakePair,address,address) (src/AgentMint.sol#671-679) ignores return value by (r0,r1,None) = lp.getReserves() (src/AgentMint.sol#672)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#unused-return
+
+Detector: missing-zero-check
+AgentToken.constructor(string,string,address,address,address,address).poolManager_ (src/AgentToken.sol#79) lacks a zero-check on :
+		- poolManager = poolManager_ (src/AgentToken.sol#84)
+AgentToken.constructor(string,string,address,address,address,address).infinityVault_ (src/AgentToken.sol#80) lacks a zero-check on :
+		- infinityVault = infinityVault_ (src/AgentToken.sol#85)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#missing-zero-address-validation
+
+Detector: calls-loop
+AgentMint._mintShares(uint256,uint256,uint256,address) (src/AgentMint.sol#433-495) has external calls inside a loop: token.mint(address(this),POOL_SHARE) (src/AgentMint.sol#466)
+	Calls stack containing the loop:
+		AgentMint.mint(uint256,address,uint256)
+		AgentMint._mintWithBnb(uint256,address,uint256)
+AgentMint._mintShares(uint256,uint256,uint256,address) (src/AgentMint.sol#433-495) has external calls inside a loop: token.mint(msg.sender,userT) (src/AgentMint.sol#468)
+	Calls stack containing the loop:
+		AgentMint.mint(uint256,address,uint256)
+		AgentMint._mintWithBnb(uint256,address,uint256)
+AgentMint._payOrOwe(address,uint256) (src/AgentMint.sol#682-689) has external calls inside a loop: IWrappedBNB(wbnb).withdraw(amount) (src/AgentMint.sol#683)
+	Calls stack containing the loop:
+		AgentMint.mint(uint256,address,uint256)
+		AgentMint._mintWithBnb(uint256,address,uint256)
+		AgentMint._mintShares(uint256,uint256,uint256,address)
+		AgentMint._open(uint256,uint256)
+AgentMint._payOrOwe(address,uint256) (src/AgentMint.sol#682-689) has external calls inside a loop: (ok,None) = to.call{value: amount}() (src/AgentMint.sol#684)
+	Calls stack containing the loop:
+		AgentMint.mint(uint256,address,uint256)
+		AgentMint._mintWithBnb(uint256,address,uint256)
+		AgentMint._mintShares(uint256,uint256,uint256,address)
+		AgentMint._open(uint256,uint256)
+AgentMint._open(uint256,uint256) (src/AgentMint.sol#527-543) has external calls inside a loop: lp = pair.mint(DEAD) (src/AgentMint.sol#539)
+	Calls stack containing the loop:
+		AgentMint.mint(uint256,address,uint256)
+		AgentMint._mintWithBnb(uint256,address,uint256)
+		AgentMint._mintShares(uint256,uint256,uint256,address)
+AgentMint._open(uint256,uint256) (src/AgentMint.sol#527-543) has external calls inside a loop: token.enableTrading() (src/AgentMint.sol#540)
+	Calls stack containing the loop:
+		AgentMint.mint(uint256,address,uint256)
+		AgentMint._mintWithBnb(uint256,address,uint256)
+		AgentMint._mintShares(uint256,uint256,uint256,address)
+AgentMint._open(uint256,uint256) (src/AgentMint.sol#527-543) has external calls inside a loop: pair.sync() (src/AgentMint.sol#541)
+	Calls stack containing the loop:
+		AgentMint.mint(uint256,address,uint256)
+		AgentMint._mintWithBnb(uint256,address,uint256)
+		AgentMint._mintShares(uint256,uint256,uint256,address)
+AgentMint._mintShares(uint256,uint256,uint256,address) (src/AgentMint.sol#433-495) has external calls inside a loop: token.mint(address(this),POOL_SHARE) (src/AgentMint.sol#466)
+	Calls stack containing the loop:
+		AgentMint.mintWithBnb(uint256,address,uint256)
+		AgentMint._mintWithBnb(uint256,address,uint256)
+AgentMint._mintShares(uint256,uint256,uint256,address) (src/AgentMint.sol#433-495) has external calls inside a loop: token.mint(msg.sender,userT) (src/AgentMint.sol#468)
+	Calls stack containing the loop:
+		AgentMint.mintWithBnb(uint256,address,uint256)
+		AgentMint._mintWithBnb(uint256,address,uint256)
+AgentMint._payOrOwe(address,uint256) (src/AgentMint.sol#682-689) has external calls inside a loop: IWrappedBNB(wbnb).withdraw(amount) (src/AgentMint.sol#683)
+	Calls stack containing the loop:
+		AgentMint.mintWithBnb(uint256,address,uint256)
+		AgentMint._mintWithBnb(uint256,address,uint256)
+		AgentMint._mintShares(uint256,uint256,uint256,address)
+		AgentMint._open(uint256,uint256)
+AgentMint._payOrOwe(address,uint256) (src/AgentMint.sol#682-689) has external calls inside a loop: (ok,None) = to.call{value: amount}() (src/AgentMint.sol#684)
+	Calls stack containing the loop:
+		AgentMint.mintWithBnb(uint256,address,uint256)
+		AgentMint._mintWithBnb(uint256,address,uint256)
+		AgentMint._mintShares(uint256,uint256,uint256,address)
+		AgentMint._open(uint256,uint256)
+AgentMint._open(uint256,uint256) (src/AgentMint.sol#527-543) has external calls inside a loop: lp = pair.mint(DEAD) (src/AgentMint.sol#539)
+	Calls stack containing the loop:
+		AgentMint.mintWithBnb(uint256,address,uint256)
+		AgentMint._mintWithBnb(uint256,address,uint256)
+		AgentMint._mintShares(uint256,uint256,uint256,address)
+AgentMint._open(uint256,uint256) (src/AgentMint.sol#527-543) has external calls inside a loop: token.enableTrading() (src/AgentMint.sol#540)
+	Calls stack containing the loop:
+		AgentMint.mintWithBnb(uint256,address,uint256)
+		AgentMint._mintWithBnb(uint256,address,uint256)
+		AgentMint._mintShares(uint256,uint256,uint256,address)
+AgentMint._open(uint256,uint256) (src/AgentMint.sol#527-543) has external calls inside a loop: pair.sync() (src/AgentMint.sol#541)
+	Calls stack containing the loop:
+		AgentMint.mintWithBnb(uint256,address,uint256)
+		AgentMint._mintWithBnb(uint256,address,uint256)
+		AgentMint._mintShares(uint256,uint256,uint256,address)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation/#calls-inside-a-loop
+
+Detector: reentrancy-benign
+Reentrancy in AgentMint._mintWithBnb(uint256,address,uint256) (src/AgentMint.sol#378-391):
+	External calls:
+	- IWrappedBNB(wbnb).deposit{value: cost}() (src/AgentMint.sol#383)
+	State variables written after the call(s):
+	- _register(id) (src/AgentMint.sol#384)
+		- participantCount ++ (src/AgentMint.sol#278)
+	- _register(id) (src/AgentMint.sol#384)
+		- participants.push(id) (src/AgentMint.sol#277)
+	- _register(id) (src/AgentMint.sol#384)
+		- registered[id] = true (src/AgentMint.sol#276)
+Reentrancy in AgentMint._payOrOwe(address,uint256) (src/AgentMint.sol#682-689):
+	External calls:
+	- IWrappedBNB(wbnb).withdraw(amount) (src/AgentMint.sol#683)
+	- (ok,None) = to.call{value: amount}() (src/AgentMint.sol#684)
+	External calls sending eth:
+	- (ok,None) = to.call{value: amount}() (src/AgentMint.sol#684)
+	State variables written after the call(s):
+	- owedOf[to] += amount (src/AgentMint.sol#686)
+	- totalOwed += amount (src/AgentMint.sol#687)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#reentrancy-vulnerabilities-3
+
+Detector: reentrancy-events
+Reentrancy in AgentMint._swapTax() (src/AgentMint.sol#653-669):
+	External calls:
+	- _swapOn(pair,address(token),address(this)) (src/AgentMint.sol#662)
+		- lp.swap(out0,out1,to,) (src/AgentMint.sol#678)
+	- IWrappedBNB(wbnb).withdraw(bnbOut) (src/AgentMint.sol#665)
+	- token.depositDividends{value: bnbOut}() (src/AgentMint.sol#666)
+	External calls sending eth:
+	- token.depositDividends{value: bnbOut}() (src/AgentMint.sol#666)
+	Event emitted after the call(s):
+	- TaxSwapped(amount,bnbOut) (src/AgentMint.sol#668)
+Reentrancy in AgentToken.claimDividend() (src/AgentToken.sol#155-162):
+	External calls:
+	- (ok,None) = msg.sender.call{value: amount}() (src/AgentToken.sol#159)
+	Event emitted after the call(s):
+	- DividendClaimed(msg.sender,amount) (src/AgentToken.sol#161)
+Reentrancy in AgentMint.renounce() (src/AgentMint.sol#331-338):
+	External calls:
+	- token.disableBlocks() (src/AgentMint.sol#336)
+	Event emitted after the call(s):
+	- Renounced() (src/AgentMint.sol#337)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#reentrancy-vulnerabilities-4
+
+Detector: return-bomb
+AgentToken._probe(address,bytes4) (src/AgentToken.sol#184-190) tries to limit the gas of an external call that controls implicit decoding
+	(ok,data) = a.staticcall{gas: PROBE_GAS}(abi.encodeWithSelector(selector)) (src/AgentToken.sol#185)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#return-bomb
+
+Detector: timestamp
+AgentMint.opened() (src/AgentMint.sol#242-244) uses timestamp for comparisons
+	Dangerous comparisons:
+	- openedTime != 0 (src/AgentMint.sol#243)
+AgentMint.saleFailed() (src/AgentMint.sol#247-249) uses timestamp for comparisons
+	Dangerous comparisons:
+	- ! opened() && block.timestamp > failureTime (src/AgentMint.sol#248)
+AgentMint.mintClosed() (src/AgentMint.sol#252-254) uses timestamp for comparisons
+	Dangerous comparisons:
+	- opened() && (block.timestamp > openedTime + SALE_DURATION || totalMinted >= TOTAL_SHARES) (src/AgentMint.sol#253)
+AgentMint.openEarly() (src/AgentMint.sol#313-320) uses timestamp for comparisons
+	Dangerous comparisons:
+	- opened() || totalMinted == 0 || totalMinted >= OPEN_AT (src/AgentMint.sol#315)
+AgentMint._mintShares(uint256,uint256,uint256,address) (src/AgentMint.sol#433-495) uses timestamp for comparisons
+	Dangerous comparisons:
+	- live && p.addU > 0 (src/AgentMint.sol#485)
+	- live && lastTaxSwapBlock != block.number && token.balanceOf(address(this)) > 0 (src/AgentMint.sol#489)
+AgentMint.exit(uint256) (src/AgentMint.sol#553-581) uses timestamp for comparisons
+	Dangerous comparisons:
+	- opened() || totalMinted >= OPEN_AT (src/AgentMint.sol#554)
+AgentMint.claimRefund() (src/AgentMint.sol#586-595) uses timestamp for comparisons
+	Dangerous comparisons:
+	- block.timestamp > failureTime + REFUND_WINDOW (src/AgentMint.sol#588)
+AgentMint.sweepUnclaimed() (src/AgentMint.sol#599-612) uses timestamp for comparisons
+	Dangerous comparisons:
+	- ! saleFailed() || block.timestamp <= failureTime + REFUND_WINDOW (src/AgentMint.sol#600)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#block-timestamp
+
+Detector: assembly
+SafeERC20._safeTransfer(IERC20,address,uint256,bool) (src/vendor/openzeppelin/token/ERC20/utils/SafeERC20.sol#176-200) uses assembly
+	- INLINE ASM (src/vendor/openzeppelin/token/ERC20/utils/SafeERC20.sol#179-199)
+SafeERC20._safeTransferFrom(IERC20,address,address,uint256,bool) (src/vendor/openzeppelin/token/ERC20/utils/SafeERC20.sol#212-244) uses assembly
+	- INLINE ASM (src/vendor/openzeppelin/token/ERC20/utils/SafeERC20.sol#221-243)
+SafeERC20._safeApprove(IERC20,address,uint256,bool) (src/vendor/openzeppelin/token/ERC20/utils/SafeERC20.sol#255-279) uses assembly
+	- INLINE ASM (src/vendor/openzeppelin/token/ERC20/utils/SafeERC20.sol#258-278)
+StorageSlot.getAddressSlot(bytes32) (src/vendor/openzeppelin/utils/StorageSlot.sol#66-70) uses assembly
+	- INLINE ASM (src/vendor/openzeppelin/utils/StorageSlot.sol#67-69)
+StorageSlot.getBooleanSlot(bytes32) (src/vendor/openzeppelin/utils/StorageSlot.sol#75-79) uses assembly
+	- INLINE ASM (src/vendor/openzeppelin/utils/StorageSlot.sol#76-78)
+StorageSlot.getBytes32Slot(bytes32) (src/vendor/openzeppelin/utils/StorageSlot.sol#84-88) uses assembly
+	- INLINE ASM (src/vendor/openzeppelin/utils/StorageSlot.sol#85-87)
+StorageSlot.getUint256Slot(bytes32) (src/vendor/openzeppelin/utils/StorageSlot.sol#93-97) uses assembly
+	- INLINE ASM (src/vendor/openzeppelin/utils/StorageSlot.sol#94-96)
+StorageSlot.getInt256Slot(bytes32) (src/vendor/openzeppelin/utils/StorageSlot.sol#102-106) uses assembly
+	- INLINE ASM (src/vendor/openzeppelin/utils/StorageSlot.sol#103-105)
+StorageSlot.getStringSlot(bytes32) (src/vendor/openzeppelin/utils/StorageSlot.sol#111-115) uses assembly
+	- INLINE ASM (src/vendor/openzeppelin/utils/StorageSlot.sol#112-114)
+StorageSlot.getStringSlot(string) (src/vendor/openzeppelin/utils/StorageSlot.sol#120-124) uses assembly
+	- INLINE ASM (src/vendor/openzeppelin/utils/StorageSlot.sol#121-123)
+StorageSlot.getBytesSlot(bytes32) (src/vendor/openzeppelin/utils/StorageSlot.sol#129-133) uses assembly
+	- INLINE ASM (src/vendor/openzeppelin/utils/StorageSlot.sol#130-132)
+StorageSlot.getBytesSlot(bytes) (src/vendor/openzeppelin/utils/StorageSlot.sol#138-142) uses assembly
+	- INLINE ASM (src/vendor/openzeppelin/utils/StorageSlot.sol#139-141)
+ECDSA.tryRecover(bytes32,bytes) (src/vendor/openzeppelin/utils/cryptography/ECDSA.sol#61-80) uses assembly
+	- INLINE ASM (src/vendor/openzeppelin/utils/cryptography/ECDSA.sol#71-75)
+ECDSA.tryRecoverCalldata(bytes32,bytes) (src/vendor/openzeppelin/utils/cryptography/ECDSA.sol#85-104) uses assembly
+	- INLINE ASM (src/vendor/openzeppelin/utils/cryptography/ECDSA.sol#95-99)
+ECDSA.parse(bytes) (src/vendor/openzeppelin/utils/cryptography/ECDSA.sol#217-240) uses assembly
+	- INLINE ASM (src/vendor/openzeppelin/utils/cryptography/ECDSA.sol#218-239)
+ECDSA.parseCalldata(bytes) (src/vendor/openzeppelin/utils/cryptography/ECDSA.sol#245-268) uses assembly
+	- INLINE ASM (src/vendor/openzeppelin/utils/cryptography/ECDSA.sol#246-267)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#assembly-usage
+
+Detector: pragma
+5 different versions of Solidity are used:
+	- Version constraint ^0.8.24 is used by:
+		-^0.8.24 (src/AgentMint.sol#32)
+		-^0.8.24 (src/AgentToken.sol#18)
+		-^0.8.24 (src/interfaces/IPancake.sol#2)
+	- Version constraint >=0.6.2 is used by:
+		->=0.6.2 (src/vendor/openzeppelin/interfaces/IERC1363.sol#4)
+		->=0.6.2 (src/vendor/openzeppelin/token/ERC20/extensions/IERC20Metadata.sol#4)
+	- Version constraint >=0.4.16 is used by:
+		->=0.4.16 (src/vendor/openzeppelin/interfaces/IERC165.sol#4)
+		->=0.4.16 (src/vendor/openzeppelin/interfaces/IERC20.sol#4)
+		->=0.4.16 (src/vendor/openzeppelin/token/ERC20/IERC20.sol#4)
+		->=0.4.16 (src/vendor/openzeppelin/utils/introspection/IERC165.sol#4)
+	- Version constraint >=0.8.4 is used by:
+		->=0.8.4 (src/vendor/openzeppelin/interfaces/draft-IERC6093.sol#4)
+	- Version constraint ^0.8.20 is used by:
+		-^0.8.20 (src/vendor/openzeppelin/token/ERC20/ERC20.sol#4)
+		-^0.8.20 (src/vendor/openzeppelin/token/ERC20/utils/SafeERC20.sol#4)
+		-^0.8.20 (src/vendor/openzeppelin/utils/Context.sol#4)
+		-^0.8.20 (src/vendor/openzeppelin/utils/ReentrancyGuard.sol#4)
+		-^0.8.20 (src/vendor/openzeppelin/utils/StorageSlot.sol#5)
+		-^0.8.20 (src/vendor/openzeppelin/utils/cryptography/ECDSA.sol#4)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#different-pragma-directives-are-used
+
+Detector: cyclomatic-complexity
+AgentMint._mintShares(uint256,uint256,uint256,address) (src/AgentMint.sol#433-495) has a high cyclomatic complexity (13).
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#cyclomatic-complexity
+
+Detector: dead-code
+Context._contextSuffixLength() (src/vendor/openzeppelin/utils/Context.sol#25-27) is never used and should be removed
+Context._msgData() (src/vendor/openzeppelin/utils/Context.sol#21-23) is never used and should be removed
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#dead-code
+
+Detector: solc-version
+Version constraint >=0.6.2 contains known severe issues (https://solidity.readthedocs.io/en/latest/bugs.html)
+	- MissingSideEffectsOnSelectorAccess
+	- AbiReencodingHeadOverflowWithStaticArrayCleanup
+	- DirtyBytesArrayToStorage
+	- NestedCalldataArrayAbiReencodingSizeValidation
+	- ABIDecodeTwoDimensionalArrayMemory
+	- KeccakCaching
+	- EmptyByteArrayCopy
+	- DynamicArrayCleanup
+	- MissingEscapingInFormatting
+	- ArraySliceDynamicallyEncodedBaseType
+	- ImplicitConstructorCallvalueCheck
+	- TupleAssignmentMultiStackSlotComponents
+	- MemoryArrayCreationOverflow.
+It is used by:
+	- >=0.6.2 (src/vendor/openzeppelin/interfaces/IERC1363.sol#4)
+	- >=0.6.2 (src/vendor/openzeppelin/token/ERC20/extensions/IERC20Metadata.sol#4)
+Version constraint >=0.4.16 contains known severe issues (https://solidity.readthedocs.io/en/latest/bugs.html)
+	- DirtyBytesArrayToStorage
+	- ABIDecodeTwoDimensionalArrayMemory
+	- KeccakCaching
+	- EmptyByteArrayCopy
+	- DynamicArrayCleanup
+	- ImplicitConstructorCallvalueCheck
+	- TupleAssignmentMultiStackSlotComponents
+	- MemoryArrayCreationOverflow
+	- privateCanBeOverridden
+	- SignedArrayStorageCopy
+	- ABIEncoderV2StorageArrayWithMultiSlotElement
+	- DynamicConstructorArgumentsClippedABIV2
+	- UninitializedFunctionPointerInConstructor_0.4.x
+	- IncorrectEventSignatureInLibraries_0.4.x
+	- ExpExponentCleanup
+	- NestedArrayFunctionCallDecoder
+	- ZeroFunctionSelector.
+It is used by:
+	- >=0.4.16 (src/vendor/openzeppelin/interfaces/IERC165.sol#4)
+	- >=0.4.16 (src/vendor/openzeppelin/interfaces/IERC20.sol#4)
+	- >=0.4.16 (src/vendor/openzeppelin/token/ERC20/IERC20.sol#4)
+	- >=0.4.16 (src/vendor/openzeppelin/utils/introspection/IERC165.sol#4)
+Version constraint >=0.8.4 contains known severe issues (https://solidity.readthedocs.io/en/latest/bugs.html)
+	- FullInlinerNonExpressionSplitArgumentEvaluationOrder
+	- MissingSideEffectsOnSelectorAccess
+	- AbiReencodingHeadOverflowWithStaticArrayCleanup
+	- DirtyBytesArrayToStorage
+	- DataLocationChangeInInternalOverride
+	- NestedCalldataArrayAbiReencodingSizeValidation
+	- SignedImmutables.
+It is used by:
+	- >=0.8.4 (src/vendor/openzeppelin/interfaces/draft-IERC6093.sol#4)
+Version constraint ^0.8.20 contains known severe issues (https://solidity.readthedocs.io/en/latest/bugs.html)
+	- VerbatimInvalidDeduplication
+	- FullInlinerNonExpressionSplitArgumentEvaluationOrder
+	- MissingSideEffectsOnSelectorAccess.
+It is used by:
+	- ^0.8.20 (src/vendor/openzeppelin/token/ERC20/ERC20.sol#4)
+	- ^0.8.20 (src/vendor/openzeppelin/token/ERC20/utils/SafeERC20.sol#4)
+	- ^0.8.20 (src/vendor/openzeppelin/utils/Context.sol#4)
+	- ^0.8.20 (src/vendor/openzeppelin/utils/ReentrancyGuard.sol#4)
+	- ^0.8.20 (src/vendor/openzeppelin/utils/StorageSlot.sol#5)
+	- ^0.8.20 (src/vendor/openzeppelin/utils/cryptography/ECDSA.sol#4)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#incorrect-versions-of-solidity
+
+Detector: low-level-calls
+Low level call in AgentMint.claimOwed() (src/AgentMint.sol#284-292):
+	- (ok,None) = msg.sender.call{value: amount}() (src/AgentMint.sol#289)
+Low level call in AgentMint._mintWithBnb(uint256,address,uint256) (src/AgentMint.sol#378-391):
+	- (ok,None) = msg.sender.call{value: refund}() (src/AgentMint.sol#388)
+Low level call in AgentMint.sweepUnclaimed() (src/AgentMint.sol#599-612):
+	- (ok,None) = DEAD.call{value: amount}() (src/AgentMint.sol#608)
+Low level call in AgentMint._payOrOwe(address,uint256) (src/AgentMint.sol#682-689):
+	- (ok,None) = to.call{value: amount}() (src/AgentMint.sol#684)
+Low level call in AgentMint._pay(address,uint256) (src/AgentMint.sol#691-695):
+	- (ok,None) = to.call{value: amount}() (src/AgentMint.sol#693)
+Low level call in AgentToken.claimDividend() (src/AgentToken.sol#155-162):
+	- (ok,None) = msg.sender.call{value: amount}() (src/AgentToken.sol#159)
+Low level call in AgentToken._probe(address,bytes4) (src/AgentToken.sol#184-190):
+	- (ok,data) = a.staticcall{gas: PROBE_GAS}(abi.encodeWithSelector(selector)) (src/AgentToken.sol#185)
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#low-level-calls
+
+Detector: naming-convention
+Variable AgentMint.BASE_PRICE (src/AgentMint.sol#88) is not in mixedCase
+Variable AgentMint.OPEN_BNB (src/AgentMint.sol#89) is not in mixedCase
+Reference: https://github.com/crytic/slither/wiki/Detector-Documentation#conformance-to-solidity-naming-conventions
+. analyzed (22 contracts with 102 detectors), 74 result(s) found

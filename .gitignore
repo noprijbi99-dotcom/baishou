@@ -18,3 +18,8 @@ docs/
 .env
 .env.*
 !.env.example
+
+# BAISHOU testnet deployer keys + broadcast logs (never commit keys)
+testnet-deployer-key.json
+testnet-test-users.json
+/broadcast/*/97/

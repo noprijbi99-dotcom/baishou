@@ -1,47 +1,113 @@
 // SPDX-License-Identifier: MIT
 // BAISHOU - jalur REFUND EXIT (keluar sebelum pool buka, kembali 80%).
-// Desain: POLA-BARU-ARUNIKA.md §2/§10 - minter pre-pool boleh exit sebelum
-// pool buka, terima 80% kembali; 20% forfeit masuk LP KONDIONAL: kalau launch
-// akhirnya GAGAL, exiters dapat 100% kembali (forfeit dikembalikan).
-// Aturan exit-vs-target: exit hanya selama net shares (terjual - exit) < target;
-// sesudah target tercapai, exit ditutup (yang sudah masuk, ikut).
-// Fungsi exit() BELUM ADA di fork AIC - test di bawah ini spesifikasi.
+// Desain FINAL: minter pre-pool boleh exit sebelum pool buka, terima 80%;
+// 20% forfeit masuk LP KONDIONAL: kalau launch akhirnya GAGAL, exiters
+// dapat 100% kembali (forfeit dikembalikan via claimRefund).
+// Exit hanya selama net shares (terjual - exit) < target 168.000.
 pragma solidity ^0.8.24;
 
 import {BaishouTest} from "./Baishou.t.sol";
+import {AgentMint} from "../src/AgentMint.sol";
 
 contract RefundExitTest is BaishouTest {
     function test_Exit80PercentPrePool() public {
-        vm.skip(true, "TODO(final): exit() belum ada - keluar pre-pool kembali 80%");
-        // Target: alice mint 10 share (0,0168 BNB), exit() terima 0,01344 BNB;
-        // 0,00336 BNB (20%) ditahan sebagai forfeit kondisional.
-    }
-
-    function test_ExitForfeitToLpConditionally() public {
-        vm.skip(true, "TODO(final): forfeit 20% -> LP kalau launch sukses");
-        // Target: launch sukses (pool buka) -> forfeit alice masuk LP;
-        // LP bertambah sebesar forfeit yang terkumpul.
-    }
-
-    function test_ExitForfeitReturnedIfLaunchFails() public {
-        vm.skip(true, "TODO(final): launch gagal -> exiters dapat 100% kembali");
-        // Target: alice exit (terima 80%), lalu launch gagal -> alice
-        // claimRefund() terima sisa 20% forfeit-nya. Total kembali 100%.
-    }
-
-    function test_ExitDisabledAfterTargetHit() public {
-        vm.skip(true, "TODO(final): exit ditutup saat net shares >= 16.800 (target tercapai)");
-        // Target: sesudah target tercapai, exit() revert - mencegah exit massal
-        // membunuh launch yang sudah mencapai target (temuan NO-MISTAKE-CHECK §2.5).
-    }
-
-    function test_ExitAfterPoolOpenReverts() public {
-        vm.skip(true, "TODO(final): exit() revert sesudah pool buka - yang berlaku tinggal jual di pasar");
+        _mintAs(alice, 10, address(0));
+        uint256 before = alice.balance;
+        vm.prank(alice);
+        mint.exit(10);
+        assertEq(alice.balance, before + 0.0168 ether * 80 / 100, "kembali 80%");
+        assertEq(mint.forfeitOf(alice), 0.0168 ether * 20 / 100, "20% forfeit tercatat");
+        assertEq(mint.forfeitPool(), 0.0168 ether * 20 / 100, "forfeit pool terakumulasi");
+        assertEq(mint.mintedCount(ALICE_ID), 0, "share alice habis");
+        assertEq(mint.totalMinted(), 0, "totalMinted turun");
+        assertEq(token.balanceOf(alice), 0, "token alice dibakar");
+        assertEq(mint.deposits(alice), 0, "deposit alice habis");
     }
 
     function test_ExitBurnsSharesAndTokens() public {
-        vm.skip(true, "TODO(final): exit() membakar share + token minter (tidak bisa exit lalu tetap pegang token)");
-        // Target: sesudah exit, mintedCount alice berkurang, token balance
-        // alice berkurang sejumlah share yang di-exit, totalMinted turun.
+        _mintAs(alice, 5, address(0));
+        vm.prank(alice);
+        mint.exit(2);
+        assertEq(mint.mintedCount(ALICE_ID), 3, "sisa 3 share");
+        assertEq(mint.totalMinted(), 3, "total 3 share");
+        assertEq(token.balanceOf(alice), 3 * 168_000_000 ether, "sisa 3 x 168 jt token");
+        assertEq(mint.deposits(alice), 3 * 0.00168 ether, "deposit sisa 3 share");
+    }
+
+    function test_ExitForfeitToLpConditionally() public {
+        _mintAs(alice, 10, address(0));
+        vm.prank(alice);
+        mint.exit(10);
+        uint256 forfeit = 0.0168 ether * 20 / 100;
+        _openPool(carol);
+        // Forfeit ikut jadi likuiditas bonus di atas OPEN_BNB.
+        assertEq(wbnb.balanceOf(address(_pair())), mint.OPEN_BNB() + forfeit, "LP + forfeit");
+        (uint256 rBnb,) = mint.reserves();
+        assertEq(rBnb, mint.OPEN_BNB() + forfeit, "reserve BNB termasuk forfeit");
+        assertEq(mint.forfeitPool(), 0, "forfeit pool kosong sesudah _open");
+    }
+
+    function test_ExitForfeitReturnedIfLaunchFails() public {
+        _mintAs(alice, 10, address(0));
+        vm.prank(alice);
+        mint.exit(10);
+        uint256 forfeit = 0.0168 ether * 20 / 100;
+        vm.warp(vm.getBlockTimestamp() + 7 days + 1);
+        assertTrue(mint.saleFailed(), "launch gagal");
+        uint256 before = alice.balance;
+        vm.prank(alice);
+        mint.claimRefund();
+        assertEq(alice.balance, before + forfeit, "forfeit 20% kembali");
+        assertEq(mint.forfeitOf(alice), 0, "forfeit habis diklaim");
+        // Total kembali: 80% (exit) + 20% (refund) = 100% dari 0,0168.
+    }
+
+    function test_ExitDisabledAfterTargetHit() public {
+        // Guard: net shares >= target -> exit tutup (state ini hanya
+        // tercapai via store di test; di produksi pool langsung buka).
+        _mintAs(alice, 10, address(0));
+        vm.store(address(mint), bytes32(uint256(0)), bytes32(mint.OPEN_AT()));
+        vm.prank(alice);
+        vm.expectRevert(AgentMint.ExitClosed.selector);
+        mint.exit(1);
+    }
+
+    function test_ExitAfterPoolOpenReverts() public {
+        _mintAs(alice, 5, address(0));
+        _openPool(carol);
+        vm.prank(alice);
+        vm.expectRevert(AgentMint.ExitClosed.selector);
+        mint.exit(1);
+    }
+
+    function test_ExitWhilePausedWorks() public {
+        _mintAs(alice, 5, address(0));
+        vm.prank(admin);
+        mint.setPaused(true);
+        uint256 before = alice.balance;
+        vm.prank(alice);
+        mint.exit(5);
+        assertEq(alice.balance, before + 5 * 0.00168 ether * 80 / 100, "pause tidak blokir exit");
+    }
+
+    function test_ExitMoreThanOwnedReverts() public {
+        _mintAs(alice, 2, address(0));
+        vm.prank(alice);
+        vm.expectRevert(AgentMint.BadShares.selector);
+        mint.exit(3);
+        vm.prank(alice);
+        vm.expectRevert(AgentMint.BadShares.selector);
+        mint.exit(0);
+    }
+
+    function test_ExitReducesEscrowSoTreasuryNotOverpaid() public {
+        // Alice mint 10 dgn referrer bob, lalu exit 10 penuh: escrow
+        // treasury + referral ikut berkurang, jadi _open tidak overpay.
+        _mintAs(alice, 10, bob);
+        vm.prank(alice);
+        mint.exit(10);
+        assertEq(mint.escrowTreasury(), 0, "escrow treasury kembali 0");
+        assertEq(mint.referralAccrued(bob), 0, "akrual referral kembali 0");
+        assertEq(mint.pendingBnb(), 0, "pending BNB kembali 0");
     }
 }

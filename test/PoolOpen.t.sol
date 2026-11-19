@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: MIT
-// BAISHOU - jalur POOL OPEN (buka pool di share 16.800).
-// Desain: POLA-BARU-ARUNIKA.md §2/§3 - pool buka otomatis saat share 16.800:
-// 22,5792 BNB + 2,25792 miliar token; LP 100% ke DEAD; trading dibuka;
-// mint lanjut di kurva epoch; mint tutup 7 hari setelah pool buka ATAU 168.000 share.
+// BAISHOU - jalur POOL OPEN (buka pool di share 168.000).
+// Desain FINAL: pool buka otomatis saat share 168.000: 225,792 BNB +
+// 22,5792 triliun token; LP 100% ke DEAD; trading dibuka; mint lanjut di
+// kurva epoch; mint tutup 7 hari setelah pool buka ATAU 1.680.000 share.
 pragma solidity ^0.8.24;
 
 import {BaishouTest} from "./Baishou.t.sol";
 import {AgentMint} from "../src/AgentMint.sol";
+import {AgentToken} from "../src/AgentToken.sol";
+import {MockPair} from "./mocks/Mocks.sol";
 
 contract PoolOpenTest is BaishouTest {
     function test_PoolNotOpenInitially() public view {
@@ -19,35 +21,129 @@ contract PoolOpenTest is BaishouTest {
         mint.openEarly();
     }
 
-    function test_PoolOpensAt16800Shares() public {
-        vm.skip(true, "TODO: butuh 16.800 share mint (168 alamat x 100 tx di fork) - jalankan setelah parameterisasi, atau via priceDiv test");
-        // Target: sesudah totalMinted == 16.800, opened() == true,
-        // tradingEnabled() == true, dan reserves() == (22,5792 BNB, 2,25792 miliar token).
+    function test_PoolOpensAt168000Shares() public {
+        _openPool(carol);
+        assertTrue(mint.opened(), "pool buka di share 168.000");
+        assertTrue(token.tradingEnabled(), "trading dibuka saat pool buka");
+        assertEq(mint.totalMinted(), 168_000, "total 168.000 share");
+        (uint256 rBnb, uint256 rToken) = mint.reserves();
+        assertEq(rBnb, mint.OPEN_BNB(), "reserve BNB = 225,792");
+        assertEq(rToken, mint.OPEN_TOKENS(), "reserve token = 22,5792 triliun");
+        assertEq(token.balanceOf(address(_pair())), mint.OPEN_TOKENS(), "pair pegang token pool");
+        assertEq(wbnb.balanceOf(address(_pair())), mint.OPEN_BNB(), "pair pegang WBNB pool");
     }
 
     function test_LpBurnedToDead() public {
-        vm.skip(true, "TODO: LP token pool harus 100% ke DEAD (0x000000000000000000000000000000000000dEaD)");
-        // Target: balance LP (pair.totalSupply / balanceOf DEAD) == 100% supply LP.
+        _openPool(carol);
+        MockPair p = _pair();
+        assertEq(p.totalSupply(), 1000, "LP tercetak (mock: 1000)");
+        assertEq(p.balanceOf(mint.DEAD()), 1000, "100% LP ke DEAD");
+        assertEq(p.balanceOf(address(mint)), 0, "minter tidak pegang LP");
     }
 
-    function test_EpochPriceRises2PercentPer1680Shares() public {
-        vm.skip(true, "TODO: parameterisasi - priceUnits epoch LINEAR +2% per 1.680 share");
-        // Target: costOf(1) di share 16.801..18.480 == 0,00168 * 1,02;
-        // di epoch ke-50 cap 0,00336 lalu datar (bukan naik terus).
+    function test_EpochPriceRises2PercentPer16800Shares() public {
+        assertEq(mint.priceUnits(168_000), 100, "flat sampai share 168.000");
+        assertEq(mint.priceUnits(168_001), 102, "epoch 1: +2%");
+        assertEq(mint.priceUnits(184_800), 102, "epoch 1 sampai share 184.800");
+        assertEq(mint.priceUnits(184_801), 104, "epoch 2: +4%");
+        assertEq(mint.priceUnits(201_600), 104, "epoch 2 sampai share 201.600");
+        // costOf di tengah epoch 1 (totalMinted = 168.000 -> share berikut 102).
+        vm.store(address(mint), bytes32(uint256(0)), bytes32(uint256(168_000)));
+        assertEq(mint.costOf(1), 0.00168 ether * 102 / 100, "1 share epoch 1 = 0,0017136");
     }
 
     function test_PriceCap2x() public {
-        vm.skip(true, "TODO: parameterisasi - harga max 0,00336 BNB (2x), tercapai ~share 100.800");
-        // Target: costOf(1) di share >= 100.800 selalu == 0,00336 ether.
+        assertEq(mint.priceUnits(1_008_000), 200, "cap 2x tercapai di share 1.008.000");
+        assertEq(mint.priceUnits(1_008_001), 200, "tetap 200 sesudah cap");
+        assertEq(mint.priceUnits(1_680_000), 200, "tetap 200 sampai sold out");
+        vm.store(address(mint), bytes32(uint256(0)), bytes32(uint256(1_007_999)));
+        assertEq(mint.costOf(1), 0.00336 ether, "harga max 0,00336 BNB (2x)");
+        vm.store(address(mint), bytes32(uint256(0)), bytes32(uint256(1_500_000)));
+        assertEq(mint.costOf(1), 0.00336 ether, "harga datar di cap");
     }
 
     function test_MintCloses7DaysAfterOpenOr168kShares() public {
-        vm.skip(true, "TODO(final): mint tutup 7 hari setelah pool buka ATAU 168.000 share - fungsi penutup belum ada di fork");
-        // Target: mint sesudah deadline/ sold out revert SoldOut; supply final, tidak ada dilusi.
+        _openPool(carol);
+        assertFalse(mint.mintClosed(), "mint masih buka tepat saat pool buka");
+        vm.warp(vm.getBlockTimestamp() + 7 days + 1);
+        assertTrue(mint.mintClosed(), "mint tutup 7 hari sesudah pool buka");
+        uint256 cost = mint.costOf(1);
+        vm.prank(alice);
+        vm.expectRevert(AgentMint.SoldOut.selector);
+        mint.mint{value: cost}(1, address(0), cost);
+    }
+
+    function test_MintClosesAtTotalShares() public {
+        _openPool(carol);
+        vm.store(address(mint), bytes32(uint256(0)), bytes32(mint.TOTAL_SHARES()));
+        assertTrue(mint.mintClosed(), "mint tutup saat 1.680.000 share");
+        uint256 cost = mint.costOf(1);
+        vm.prank(alice);
+        vm.expectRevert(AgentMint.SoldOut.selector);
+        mint.mint{value: cost}(1, address(0), cost);
     }
 
     function test_OnePairOnly() public {
-        vm.skip(true, "TODO(final): SATU pair saja (token/WBNB); pair lain ditolak transfersClosed/PoolRejected");
-        // Target: transfer ke pair palsu revert; setPoolBlocked tidak bisa memblokir pair resmi.
+        _openPool(carol);
+        // Pair palsu (MockPair token/WBNB lain) ditolak saat transfer.
+        MockPair fake = new MockPair(address(token), address(wbnb));
+        address fakeAddr = address(fake);
+        address pairAddr = address(_pair());
+        vm.prank(alice);
+        vm.expectRevert(AgentToken.PoolRejected.selector);
+        token.transfer(fakeAddr, 1 ether);
+        // Pair resmi tidak bisa diblokir admin.
+        vm.prank(admin);
+        vm.expectRevert(AgentMint.NotBlockable.selector);
+        mint.setPoolBlocked(pairAddr, true);
+    }
+
+    function test_TreasuryAndReferralPaidAtOpen() public {
+        // Alice mint 10 share dengan referrer bob (pre-pool, nyata).
+        uint256 costAlice = mint.costOf(10);
+        vm.prank(alice);
+        mint.mint{value: costAlice}(10, bob, costAlice);
+        assertEq(treasury.balance, 0, "treasury 0 sebelum pool buka");
+        assertEq(bob.balance, 100 ether, "referrer 0 sebelum pool buka");
+
+        _openPool(carol); // carol mint pemicu 1 share tanpa referrer
+        uint256 costTrigger = mint.BASE_PRICE();
+        uint256 expectedTreasury = (costAlice + costTrigger) * 1_500 / 10_000;
+        assertEq(treasury.balance, expectedTreasury, "treasury 15% dibayar SEKALI saat pool buka");
+        assertEq(mint.escrowTreasury(), 0, "escrow treasury kosong sesudah _open");
+
+        // Referral pre-pool tetap claimable (PULL) sesudah pool buka.
+        uint256 expectedRef = costAlice * 500 / 10_000;
+        assertEq(mint.referralAccrued(bob), expectedRef, "5% alice terakru buat bob");
+        uint256 bobBefore = bob.balance;
+        vm.prank(bob);
+        mint.claimReferral();
+        assertEq(bob.balance, bobBefore + expectedRef, "bob terima komisi 5%");
+        assertEq(mint.referralAccrued(bob), 0, "akrual habis sesudah klaim");
+    }
+
+    function test_PostPoolTreasuryAccruesForClaim() public {
+        _openPool(carol);
+        // Mint pasca-pool: treasury TIDAK dibayar langsung (pola akumulasi
+        // + claim yang konsisten dengan pre-pool), tapi terakru.
+        uint256 cost = mint.costOf(1);
+        uint256 treasuryBefore = treasury.balance;
+        vm.prank(alice);
+        mint.mint{value: cost}(1, address(0), cost);
+        assertEq(treasury.balance, treasuryBefore, "treasury tidak dibayar instan pasca-pool");
+        uint256 accrued = mint.escrowTreasury();
+        assertEq(accrued, cost * 1_500 / 10_000, "15% pasca-pool terakru");
+        vm.prank(treasury);
+        mint.claimTreasury();
+        assertEq(treasury.balance, treasuryBefore + accrued, "treasury klaim akrual");
+        assertEq(mint.escrowTreasury(), 0, "escrow kosong sesudah klaim");
+    }
+
+    function test_ClaimReferralBeforeOpenReverts() public {
+        _mintAs(alice, 1, bob);
+        assertGt(mint.referralAccrued(bob), 0, "akrual ada sebelum pool buka");
+        vm.prank(bob);
+        vm.expectRevert(AgentMint.NotOpen.selector);
+        mint.claimReferral();
     }
 }

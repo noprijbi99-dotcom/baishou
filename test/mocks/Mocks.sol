@@ -10,6 +10,8 @@
 //   registry.setOwner(uint256(keccak256(bytes("alice"))), alice);
 pragma solidity ^0.8.24;
 
+import {IERC20} from "../../src/vendor/openzeppelin/token/ERC20/IERC20.sol";
+
 /// @notice Minimal ERC20 + WBNB deposit/withdraw, just enough for AgentMint.
 contract MockWBNB {
     string public name = "Wrapped BNB";
@@ -69,13 +71,16 @@ contract MockWBNB {
 }
 
 /// @notice Minimal Pancake pair: sorted token0/token1, settable reserves,
-/// mint() returns dummy liquidity, sync()/swap() are no-ops.
+/// mint() returns dummy liquidity (credited to `to`, e.g. DEAD),
+/// swap() pays out from the pair's real token balances and re-syncs reserves
+/// from actual balances (enough to make swapTax() move real WBNB in tests).
 contract MockPair {
     address public token0;
     address public token1;
     uint112 public reserve0;
     uint112 public reserve1;
     uint256 public totalSupply;
+    mapping(address => uint256) public balanceOf;
 
     constructor(address a, address b) {
         (token0, token1) = a < b ? (a, b) : (b, a);
@@ -98,14 +103,28 @@ contract MockPair {
         return 0;
     }
 
-    function swap(uint256, uint256, address, bytes calldata) external {}
-
-    function mint(address) external returns (uint256 liquidity) {
-        totalSupply += 1000;
-        return 1000;
+    function swap(uint256 out0, uint256 out1, address to, bytes calldata) external {
+        if (out0 > 0) {
+            require(IERC20(token0).transfer(to, out0), "payout0 failed");
+        }
+        if (out1 > 0) {
+            require(IERC20(token1).transfer(to, out1), "payout1 failed");
+        }
+        reserve0 = uint112(IERC20(token0).balanceOf(address(this)));
+        reserve1 = uint112(IERC20(token1).balanceOf(address(this)));
     }
 
-    function sync() external {}
+    function mint(address to) external returns (uint256 liquidity) {
+        liquidity = 1000;
+        totalSupply += liquidity;
+        balanceOf[to] += liquidity;
+        return liquidity;
+    }
+
+    function sync() external {
+        reserve0 = uint112(IERC20(token0).balanceOf(address(this)));
+        reserve1 = uint112(IERC20(token1).balanceOf(address(this)));
+    }
 }
 
 /// @notice Minimal Pancake factory: createPair deploys a MockPair.
