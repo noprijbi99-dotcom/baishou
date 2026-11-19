@@ -1,81 +1,87 @@
 # BAISHOU — $BAISHOU
 
 > **Same price. Same cap. Same rules.**
+> Built by an agent. Decided by a human. Proven on-chain.
 
-Fair mint for Binance Agent ID holders, with no team allocation: the first 168.000 shares
-at 0,00168 BNB get a fixed 168.000.000 tokens. Price rises max 2x (not 8x).
-If the 168.000-share target is not reached within 7 days, money back 100%.
-If you want out before the pool opens, back 80%.
+A fair mint for Binance Agent ID holders. No team allocation, no presale, no
+insider price: the first 168,000 shares sell at one flat price of 0.00168 BNB,
+and every share — before and after the pool opens — carries a fixed
+168,000,000 tokens. Every BNB paid sits in escrow inside the contract. If the
+168,000-share target is not reached within 14 days, everyone claims a 100%
+refund. If you want out before the pool opens, you get 80% back.
 
-⚠️ **STATUS: DRAFT — NOT THE FINAL CONTRACT. DO NOT DEPLOY.**
-This repo is a build scaffold: AIC fork + test skeleton + skill. Finalization needs
-parameterization, new functions (freeMint / exit / claimRefund / dividends),
-Slither + full tests + independent review, per the `baishou` skill.
+## Status: LIVE on BSC mainnet (v3)
+
+| Contract | Address |
+|---|---|
+| AgentToken | `0x20e62E10C18b14F36E323835B5FCe6F45FE31c1E` |
+| AgentMint | `0xE69708358EC640C0bc86980893a4Afd01Aff6F9B` |
+| Pair BAISHOU/WBNB | `0x86b5c0cD0f07d613E7c8b10E10a45BD0D858e4f6` |
+
+- Source verified: Sourcify **exact match** and BscScan verified, both contracts.
+- Tests: 243/243 passing (`forge test`).
+- Sale opens: **19 Nov 2026, 15:00 UTC** (one-time `startSale()` by the admin).
+- Sale deadline: **3 Dec 2026, 15:00 UTC** (start + 14 days). Miss it → 100% refunds.
+- Full deploy record: `DEPLOY-MAINNET.md` §11. Design: `docs/WHITEPAPER.md`, `docs/FAQ.md`.
+- Website: https://baishou.pages.dev
 
 ## Design
 
-Design source of truth: `~/workspace/launchpad-research/POLA-BARU-ARUNIKA.md`
-(Option B, decided 19 Nov 2026). In short:
-
 | Parameter | Value |
 |---|---|
-| Total shares | 1.680.000 |
-| Pre-pool | 168.000 shares @ 0,00168 BNB flat |
-| Tokens/share | 168.000.000 (pool receives 134.400.000/share) |
-| Pool open | Share 168.000: 225,792 BNB + 22,5792 trillion tokens, LP to DEAD |
-| Post-pool curve | Epoch +2% per 16.800 shares, cap 0,00336 BNB (2x), LINEAR |
-| Free | 16.800 shares @ 168.000.000 tokens (1 per Agent ID, first-come) |
-| Cap | 168 shares per address (team the same) |
-| Gate | Agent ID-only for the entire sale; regular wallets buy secondary after the pool opens |
-| Max supply | 510,8544 trillion (contract hard cap) |
-| Treasury | 15% — paid WHEN the pool opens (escrow), not instant |
-| Referral | 5% flat — paid WHEN the pool opens (escrow) |
-| Trading tax | 2% buy / 2% sell (1% burn + 1% holder dividends); team 0% of tax |
-| Failed refund | 100% via PULL claim, 90-day window, leftovers burned to DEAD |
-| Pre-pool exit | Back 80%; 20% forfeit → LP (failed = 100% back to exiters) |
-| Mint closes | 7 days after the pool opens OR 1.680.000 shares |
-| Admin | Pause only; renounce AFTER the independent review completes |
-| Refundable deposit | Phase 2 |
+| Total shares | 1,680,000 |
+| Pre-pool | 168,000 shares @ 0.00168 BNB flat |
+| Tokens per share | 168,000,000 — fixed, always (pool is seeded at 134,400,000/share) |
+| Pool opens at | 168,000 shares sold: ≥ 225.792 BNB + 22,579,200,000,000 tokens, LP burned |
+| Post-pool curve | +2% per epoch of 16,800 shares, LINEAR, price cap 0.00336 BNB (2×) |
+| Free claim | 16,800 shares free, 1 per Agent ID, first-come |
+| Cap | 168 shares per address — the team plays by the same cap |
+| Gate | Agent ID only for the entire sale; regular wallets buy on the secondary market after the pool opens |
+| Max supply | 510,854,400,000,000 (hard cap, checked on every mint) |
+| Treasury | 15% of sale proceeds — held in escrow, paid ONLY when the pool opens |
+| Referral | 5% flat — held in escrow, paid ONLY when the pool opens |
+| Trading tax | 2% buy / 2% sell (1% burned to DEAD + 1% holder dividends) |
+| Failed sale | 100% refund via `claimRefund()` — pull-based, 90-day claim window |
+| Pre-pool exit | 80% back via `exit()`; if the sale later fails, exiters also claim back to 100% |
+| Mint closes | 7 days after the pool opens, or at sellout (1,680,000 shares) |
+| Admin | The admin wallet can: pause, call `startSale()` once, and claim the treasury after the pool opens. The admin can NOT withdraw escrowed buyer funds — no such function exists. |
 
-Team income is ONLY the 15% treasury from sales — and even that is only paid
-after the pool opens. If nobody mints, the team gets 0.
+Team income is ONLY the 15% treasury — and only if the pool opens. If the
+target misses, the team gets 0 and every buyer is refunded in full.
 
-## Fork
+## Contracts
 
-- `src/AgentMint.sol` + `src/AgentToken.sol`: fork of `$AIC`
-  (AgentMint `0x55E1501815127A199314B586e59239608Ce4C15C`, BscScan-verified).
-- `src/libraries/BurnMath.sol` does **NOT** come along — the floor burn is removed entirely
-  (design §10 #1: burn ≠ BNB liquidity). The call site in `_curveShare` has been
-  removed; leftover dead-code burn is marked `TODO(final)`.
+- `src/AgentMint.sol` + `src/AgentToken.sol`: built from a fork of `$AIC`
+  (AgentMint `0x55E1501815127A199314B586e59239608Ce4C15C`, BscScan-verified),
+  extended with the BAISHOU mechanics: `freeMint`, `exit`, `claimRefund`,
+  dividend accumulator, treasury/referral escrow, and the one-time `startSale`.
+- `src/libraries/BurnMath.sol` does **NOT** come along — the floor burn is
+  removed entirely (burn ≠ BNB liquidity).
 - `src/vendor/openzeppelin/`: OZ files (MIT) from AIC's verified source.
-- Not yet in the fork (written at finalization): `freeMint`, `exit`,
-  `claimRefund`, dividend accumulator, Agent Registry, treasury/referral escrow.
 
 ## Build & test
 
 ```sh
 forge build   # solc 0.8.28, optimizer runs 200, evm paris
-forge test    # tests without vm.skip must be green; skipped tests = BAISHOU targets
+forge test    # 243/243 green
 ```
 
-## Audit (free, layered — before mainnet)
+## Audit trail
 
 1. `forge test` + invariants (this repo).
-2. `slither . --exclude-dependencies` (venv `~/.venvs/slither`, solc 0.8.28
-   via solc-select) — first baseline 19 Nov 2026:
-   78 findings (2 High, 17 Medium, 25 Low, 34 Informational), file
-   `slither-baseline-2026-11-19.json`. All High/Medium must be triaged
-   (fixed or justified in writing) before testnet.
-3. BSC testnet: all paths (mint, pool open, failed refund, exit, dividends).
-4. Community forensic audit via Square (free) + paid independent review
-   from the treasury WHEN the pool opens — then renounce.
+2. Slither baseline, 19 Nov 2026: `slither-baseline-2026-11-19.json` —
+   all High/Medium findings triaged in writing before mainnet.
+3. Internal red-team review, 19 Nov 2026: `REDTEAM-2026-11-19.md` — the v1
+   flaws it caught were fixed in v2/v3 before a single mint.
+4. BSC testnet: all paths exercised (mint, pool open, failed refund, exit, dividends).
+5. Paid independent review is funded from the treasury when the pool opens.
 
-## Security (§8b rules)
+## Security rules
 
 - PULL refunds, never mass-push. Pause never blocks refunds.
-- The contract has NO withdraw function — funds only go to depositors or the pool.
-- Fresh deployer wallet, gas only. Testnet before mainnet.
-- Source verified on BscScan + Sourcify BEFORE announcement.
+- The contract has NO admin withdraw function — escrowed funds can only go
+  to the pool (on success) or back to buyers (refund/exit).
+- Source verified on BscScan + Sourcify before announcement.
 
 ## Skill
 
