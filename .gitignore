@@ -23,3 +23,5 @@ docs/
 testnet-deployer-key.json
 testnet-test-users.json
 /broadcast/*/97/
+mainnet-deployer-key.json
+/broadcast/*/56/
