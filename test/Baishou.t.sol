@@ -146,7 +146,7 @@ contract BaishouTest is Test {
             i++;
         }
         vm.resumeGasMetering();
-        assertTrue(mint.opened(), "pool harus buka sesudah fill ke OPEN_AT");
+        assertTrue(mint.opened(), "pool must open after fill to OPEN_AT");
     }
 
     // ---- Wiring ------------------------------------------------------------
@@ -214,58 +214,58 @@ contract BaishouTest is Test {
     function test_BaishouParameterTargets() public view {
         assertEq(mint.TOTAL_SHARES(), 1_680_000, "total shares 1.680.000");
         assertEq(mint.OPEN_AT(), 168_000, "pre-pool 168.000 share");
-        assertEq(mint.PROD_BASE_PRICE(), 0.00168 ether, "harga flat 0,00168 BNB");
-        assertEq(mint.BASE_PRICE(), 0.00168 ether, "priceDiv=1: BASE_PRICE = harga prod");
+        assertEq(mint.PROD_BASE_PRICE(), 0.00168 ether, "flat price 0,00168 BNB");
+        assertEq(mint.BASE_PRICE(), 0.00168 ether, "priceDiv=1: BASE_PRICE = prod price");
         assertEq(mint.PROD_OPEN_BNB(), 225.792 ether, "pool open 225,792 BNB");
         assertEq(mint.OPEN_BNB(), 225.792 ether, "priceDiv=1: OPEN_BNB = prod");
         assertEq(mint.USER_SHARE(), 168_000_000 ether, "168.000.000 token/share");
-        assertEq(mint.POOL_SHARE(), 134_400_000 ether, "134.400.000 token/share ke pool");
-        assertEq(mint.OPEN_TOKENS(), 22_579_200_000_000 ether, "pool open 22,5792 triliun token");
-        assertEq(mint.MAX_SUPPLY(), 510_854_400_000_000 ether, "max supply 510,8544 triliun");
+        assertEq(mint.POOL_SHARE(), 134_400_000 ether, "134.400.000 token/share to pool");
+        assertEq(mint.OPEN_TOKENS(), 22_579_200_000_000 ether, "pool open 22,5792 trillion tokens");
+        assertEq(mint.MAX_SUPPLY(), 510_854_400_000_000 ether, "max supply 510,8544 trillion");
         assertEq(mint.TREASURY_BPS(), 1_500, "treasury 15%");
         assertEq(mint.REFERRAL_BPS(), 500, "referral 5% flat");
-        assertEq(mint.MINT_PRICE_BPS(), 10_000, "tepat 168.000.000/share, tanpa selisih 1%");
+        assertEq(mint.MINT_PRICE_BPS(), 10_000, "exactly 168.000.000/share, no 1% difference");
         assertEq(mint.MAX_PER_TX(), 168, "max 168 share/tx = cap wallet");
-        assertEq(mint.BASE_PER_ID(), 168, "cap 168 share per alamat");
-        assertEq(mint.INVITE_QUOTA(), 0, "kuota invite +2 DIHAPUS");
+        assertEq(mint.BASE_PER_ID(), 168, "cap 168 shares per address");
+        assertEq(mint.INVITE_QUOTA(), 0, "invite quota +2 REMOVED");
         assertEq(mint.FREE_SHARES(), 16_800, "free 16.800 share");
         assertEq(mint.EPOCH_SHARES(), 16_800, "epoch 16.800 share");
-        assertEq(mint.SALE_WINDOW(), 14 days, "jendela target sale 14 hari sejak start (v2)");
-        assertEq(mint.POST_POOL_WINDOW(), 7 days, "mint pasca-pool tutup +7 hari (v2)");
-        assertEq(mint.REFUND_WINDOW(), 90 days, "jendela refund 90 hari sejak gagal");
+        assertEq(mint.SALE_WINDOW(), 14 days, "sale target window 14 days since start (v2)");
+        assertEq(mint.POST_POOL_WINDOW(), 7 days, "post-pool mint closes +7 days (v2)");
+        assertEq(mint.REFUND_WINDOW(), 90 days, "refund window 90 days since failure");
     }
 
     function test_BaishouTokenTaxTargets() public view {
-        assertEq(token.BUY_TAX_BPS(), 200, "beli 2%");
-        assertEq(token.SELL_BURN_BPS(), 100, "jual 1% burn");
-        assertEq(token.SELL_KEEP_BPS(), 100, "jual 1% dividen pool (bukan feeTreasury)");
+        assertEq(token.BUY_TAX_BPS(), 200, "buy 2%");
+        assertEq(token.SELL_BURN_BPS(), 100, "sell 1% burn");
+        assertEq(token.SELL_KEEP_BPS(), 100, "sell 1% dividend pool (not feeTreasury)");
         assertEq(token.MAX_SUPPLY(), 510_854_400_000_000 ether, "token max supply = mint cap");
-        assertEq(token.MIN_DIVIDEND_CLAIM(), 0.001 ether, "min klaim dividen 0,001 BNB");
+        assertEq(token.MIN_DIVIDEND_CLAIM(), 0.001 ether, "min dividend claim 0,001 BNB");
     }
 
     function test_RegistryRegistersOnMint() public {
-        assertFalse(mint.isParticipant(ALICE_ID), "belum peserta sebelum mint");
-        assertEq(mint.participantCount(), 0, "0 peserta awal");
+        assertFalse(mint.isParticipant(ALICE_ID), "not a participant before mint");
+        assertEq(mint.participantCount(), 0, "0 initial participants");
         _mintAs(alice, 1, address(0));
-        assertTrue(mint.isParticipant(ALICE_ID), "terdaftar saat pertama mint");
-        assertEq(mint.participantCount(), 1, "1 peserta");
+        assertTrue(mint.isParticipant(ALICE_ID), "registered on first mint");
+        assertEq(mint.participantCount(), 1, "1 participant");
         _mintAs(alice, 1, address(0));
-        assertEq(mint.participantCount(), 1, "mint ke-2 ID sama tidak dobel");
+        assertEq(mint.participantCount(), 1, "2nd mint with same ID does not double-count");
         _mintAs(bob, 1, address(0));
-        assertEq(mint.participantCount(), 2, "ID baru menambah peserta");
+        assertEq(mint.participantCount(), 2, "new ID adds a participant");
     }
 
     function test_DeployTimeAndSaleFailed() public view {
-        assertEq(mint.deployTime(), block.timestamp, "deployTime = waktu deploy");
-        assertEq(mint.saleStartTime(), block.timestamp, "setUp startSale() di timestamp yang sama");
-        assertEq(mint.failureTime(), block.timestamp + 14 days, "failure = start + 14 hari (v2)");
-        assertFalse(mint.saleFailed(), "belum gagal saat deploy");
-        assertFalse(mint.mintClosed(), "mint belum tutup saat deploy");
+        assertEq(mint.deployTime(), block.timestamp, "deployTime = deploy time");
+        assertEq(mint.saleStartTime(), block.timestamp, "setUp startSale() at the same timestamp");
+        assertEq(mint.failureTime(), block.timestamp + 14 days, "failure = start + 14 days (v2)");
+        assertFalse(mint.saleFailed(), "not failed at deploy");
+        assertFalse(mint.mintClosed(), "mint not closed at deploy");
     }
 
     function test_SaleFailedAfterDeadline() public {
         vm.warp(vm.getBlockTimestamp() + 14 days + 1);
-        assertTrue(mint.saleFailed(), "gagal kalau deadline start+14 hari lewat & pool belum buka");
+        assertTrue(mint.saleFailed(), "fails if start+14 day deadline passes & pool not open");
         uint256 cost = mint.costOf(1);
         vm.prank(alice);
         vm.expectRevert(AgentMint.SoldOut.selector);

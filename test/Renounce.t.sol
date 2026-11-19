@@ -30,17 +30,17 @@ contract RenounceTest is BaishouTest {
     }
 
     function test_RenounceDelayedUntilReview() public {
-        assertFalse(mint.reviewPassed(), "review belum lolos saat deploy");
+        assertFalse(mint.reviewPassed(), "review not passed at deploy");
         vm.prank(admin);
         vm.expectRevert(AgentMint.ReviewNotPassed.selector);
         mint.renounce();
-        assertFalse(mint.renounced(), "tetap belum renounce");
+        assertFalse(mint.renounced(), "still not renounced");
         vm.prank(admin);
         mint.setReviewPassed(true);
-        assertTrue(mint.reviewPassed(), "review lolos");
+        assertTrue(mint.reviewPassed(), "review passed");
         vm.prank(admin);
         mint.renounce();
-        assertTrue(mint.renounced(), "renounce berhasil sesudah review");
+        assertTrue(mint.renounced(), "renounce succeeds after review");
     }
 
     function test_PauseNeverBlocksExit() public {
@@ -50,7 +50,7 @@ contract RenounceTest is BaishouTest {
         uint256 before = alice.balance;
         vm.prank(alice);
         mint.exit(5);
-        assertEq(alice.balance, before + 5 * 0.00168 ether * 80 / 100, "pause tidak blokir exit");
+        assertEq(alice.balance, before + 5 * 0.00168 ether * 80 / 100, "pause does not block exit");
     }
 
     function test_RenounceReleasesBlocks() public {
@@ -71,22 +71,22 @@ contract RenounceTest is BaishouTest {
         mint.setReviewPassed(true);
         vm.prank(admin);
         mint.renounce();
-        assertTrue(token.blocksDisabled(), "blocks dimatikan saat renounce");
+        assertTrue(token.blocksDisabled(), "blocks disabled on renounce");
         vm.prank(alice);
         token.transfer(dummyAddr, 1 ether);
-        assertEq(token.balanceOf(dummyAddr), 1 ether, "transfer ke ex-blocked jalan");
+        assertEq(token.balanceOf(dummyAddr), 1 ether, "transfer to ex-blocked works");
     }
 
     function test_NoWithdrawFunction() public {
         // §8b: there is NO way for funds to leave besides refund/pool. Prove
         // there is no withdraw/drain function anyone can call.
         (bool okWithdraw,) = address(mint).call(abi.encodeWithSignature("withdraw(uint256)", 1));
-        assertFalse(okWithdraw, "tidak ada withdraw(uint256)");
+        assertFalse(okWithdraw, "no withdraw(uint256)");
         (bool okDrain,) = address(mint).call(abi.encodeWithSignature("drain()"));
-        assertFalse(okDrain, "tidak ada drain()");
+        assertFalse(okDrain, "no drain()");
         (bool okRescue,) = address(mint).call(abi.encodeWithSignature("rescueTokens(address)", address(token)));
-        assertFalse(okRescue, "tidak ada rescueTokens(address)");
+        assertFalse(okRescue, "no rescueTokens(address)");
         // Not even the admin can call any path to pull the escrow.
-        assertEq(mint.escrowTreasury(), 0, "escrow kosong di awal");
+        assertEq(mint.escrowTreasury(), 0, "escrow empty at start");
     }
 }

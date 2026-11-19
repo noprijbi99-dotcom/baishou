@@ -21,13 +21,13 @@ contract DividendTest is BaishouTest {
         address pairAddr = address(_pair());
         vm.prank(alice);
         token.transfer(pairAddr, sellAmount);
-        assertEq(token.balanceOf(mint.DEAD()), deadBefore + sellAmount * 100 / 10_000, "jual 1% burn");
+        assertEq(token.balanceOf(mint.DEAD()), deadBefore + sellAmount * 100 / 10_000, "sell 1% burn");
         assertEq(
             token.balanceOf(address(mint)),
             minterBefore + sellAmount * 100 / 10_000,
-            "jual 1% kept ke minter (dividend pool, bukan feeTreasury)"
+            "sell 1% kept to minter (dividend pool, not feeTreasury)"
         );
-        assertEq(token.balanceOf(feeTreasury), 0, "feeTreasury tidak terima pajak");
+        assertEq(token.balanceOf(feeTreasury), 0, "feeTreasury receives no tax");
     }
 
     function test_BuyTaxGoesToDividendPool() public {
@@ -38,9 +38,9 @@ contract DividendTest is BaishouTest {
         uint256 minterBefore = token.balanceOf(address(mint));
         vm.prank(address(_pair()));
         token.transfer(alice, buyAmount);
-        assertEq(token.balanceOf(alice), buyAmount * 9_800 / 10_000 + 10 * 168_000_000 ether, "alice terima 98%");
+        assertEq(token.balanceOf(alice), buyAmount * 9_800 / 10_000 + 10 * 168_000_000 ether, "alice receives 98%");
         assertEq(
-            token.balanceOf(address(mint)), minterBefore + buyAmount * 200 / 10_000, "beli 2% ke minter"
+            token.balanceOf(address(mint)), minterBefore + buyAmount * 200 / 10_000, "buy 2% to minter"
         );
 
         // swapTax(): the tax tokens are sold for BNB -> into the token
@@ -51,8 +51,8 @@ contract DividendTest is BaishouTest {
         uint256 divBefore = token.totalDividends();
         vm.prank(alice);
         mint.swapTax();
-        assertEq(feeTreasury.balance, feeBefore, "feeTreasury 0 dari swap pajak");
-        assertGt(token.totalDividends(), divBefore, "BNB hasil swap masuk dividend pool");
+        assertEq(feeTreasury.balance, feeBefore, "feeTreasury 0 from tax swap");
+        assertGt(token.totalDividends(), divBefore, "BNB from swap enters dividend pool");
     }
 
     function test_DividendAccruesProRata() public {
@@ -65,8 +65,8 @@ contract DividendTest is BaishouTest {
         token.depositDividends{value: 100 ether}();
         uint256 aliceWd = token.withdrawableDividendOf(alice);
         uint256 bobWd = token.withdrawableDividendOf(bob);
-        assertGt(aliceWd, 0, "alice dapat dividen");
-        assertGt(bobWd, 0, "bob dapat dividen");
+        assertGt(aliceWd, 0, "alice gets dividend");
+        assertGt(bobWd, 0, "bob gets dividend");
         assertApproxEqAbs(aliceWd, 2 * bobWd, 10, "alice 2x bob (pro-rata token)");
         // Buyers after a deposit get no dividends from the earlier period:
         // carol (trigger mint of 1 share) holds tokens, but she minted BEFORE
@@ -81,21 +81,21 @@ contract DividendTest is BaishouTest {
         vm.prank(address(mint));
         token.depositDividends{value: 100 ether}();
         uint256 due = token.withdrawableDividendOf(alice);
-        assertGe(due, token.MIN_DIVIDEND_CLAIM(), "akrual alice di atas min klaim");
+        assertGe(due, token.MIN_DIVIDEND_CLAIM(), "alice accrual above min claim");
         uint256 before = alice.balance;
         vm.prank(alice);
         token.claimDividend();
-        assertEq(alice.balance, before + due, "klaim transfer BNB dividen");
-        assertEq(token.withdrawableDividendOf(alice), 0, "habis diklaim");
+        assertEq(alice.balance, before + due, "claim transfers dividend BNB");
+        assertEq(token.withdrawableDividendOf(alice), 0, "fully claimed");
         // Repeated claims only pay the NEW accumulation since the last claim.
         vm.deal(address(mint), 100 ether);
         vm.prank(address(mint));
         token.depositDividends{value: 100 ether}();
         uint256 due2 = token.withdrawableDividendOf(alice);
-        assertGt(due2, 0, "akrual baru muncul");
+        assertGt(due2, 0, "new accrual appears");
         vm.prank(alice);
         token.claimDividend();
-        assertEq(alice.balance, before + due + due2, "klaim ke-2 = akrual baru saja");
+        assertEq(alice.balance, before + due + due2, "2nd claim = new accrual only");
     }
 
     function test_DividendMinClaim() public {
@@ -107,20 +107,20 @@ contract DividendTest is BaishouTest {
         vm.prank(address(mint));
         token.depositDividends{value: 0.0001 ether}();
         uint256 due = token.withdrawableDividendOf(alice);
-        assertGt(due, 0, "debu tetap terakumulasi");
-        assertLt(due, token.MIN_DIVIDEND_CLAIM(), "debu di bawah min klaim");
+        assertGt(due, 0, "dust keeps accumulating");
+        assertLt(due, token.MIN_DIVIDEND_CLAIM(), "dust below min claim");
         vm.prank(alice);
         vm.expectRevert(AgentToken.DividendTooSmall.selector);
         token.claimDividend();
-        assertEq(token.withdrawableDividendOf(alice), due, "gagal klaim tidak menghanguskan");
+        assertEq(token.withdrawableDividendOf(alice), due, "failed claim does not forfeit the accrual");
         // Add deposits until past the threshold -> the claim succeeds.
         vm.deal(address(mint), 1000 ether);
         vm.prank(address(mint));
         token.depositDividends{value: 1000 ether}();
-        assertGe(token.withdrawableDividendOf(alice), token.MIN_DIVIDEND_CLAIM(), "kini di atas ambang");
+        assertGe(token.withdrawableDividendOf(alice), token.MIN_DIVIDEND_CLAIM(), "now above threshold");
         vm.prank(alice);
         token.claimDividend();
-        assertEq(token.withdrawableDividendOf(alice), 0, "habis diklaim");
+        assertEq(token.withdrawableDividendOf(alice), 0, "fully claimed");
     }
 
     function test_DividendNotDoubleClaimable() public {

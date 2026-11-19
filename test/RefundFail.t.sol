@@ -12,19 +12,19 @@ import {AgentMint} from "../src/AgentMint.sol";
 contract RefundFailTest is BaishouTest {
     function _fail() internal {
         vm.warp(vm.getBlockTimestamp() + 14 days + 1);
-        assertTrue(mint.saleFailed(), "launch gagal");
+        assertTrue(mint.saleFailed(), "launch failed");
     }
 
     function test_FailRefund100PercentPull() public {
         _mintAs(alice, 10, address(0));
         uint256 paid = 10 * 0.00168 ether;
         _fail();
-        assertEq(treasury.balance, 0, "treasury TIDAK pernah dibayar");
+        assertEq(treasury.balance, 0, "treasury is NEVER paid");
         uint256 before = alice.balance;
         vm.prank(alice);
         mint.claimRefund();
-        assertEq(alice.balance, before + paid, "refund 100% penuh");
-        assertEq(mint.deposits(alice), 0, "deposit habis sesudah klaim");
+        assertEq(alice.balance, before + paid, "refund 100% full");
+        assertEq(mint.deposits(alice), 0, "deposit depleted after claim");
         // Second claim: nothing left.
         vm.prank(alice);
         vm.expectRevert(AgentMint.NothingOwed.selector);
@@ -39,7 +39,7 @@ contract RefundFailTest is BaishouTest {
         uint256 before = alice.balance;
         vm.prank(alice);
         mint.claimRefund();
-        assertEq(alice.balance, before + 10 * 0.00168 ether, "klaim di hari ke-90 berhasil");
+        assertEq(alice.balance, before + 10 * 0.00168 ether, "claim on day 90 succeeds");
         // One second past: bob is already too late.
         vm.warp(vm.getBlockTimestamp() + 1);
         vm.prank(bob);
@@ -57,10 +57,10 @@ contract RefundFailTest is BaishouTest {
         uint256 deadBefore = dead.balance;
         vm.prank(stranger);
         mint.sweepUnclaimed();
-        assertEq(dead.balance, deadBefore + escrow, "sisa escrow dibakar ke DEAD");
-        assertEq(wbnb.balanceOf(address(mint)), 0, "escrow WBNB kosong");
-        assertEq(treasury.balance, 0, "tim tidak menerima apa pun dari sweep");
-        assertEq(mint.pendingBnb(), 0, "pending BNB 0 sesudah sweep");
+        assertEq(dead.balance, deadBefore + escrow, "remaining escrow burned to DEAD");
+        assertEq(wbnb.balanceOf(address(mint)), 0, "WBNB escrow empty");
+        assertEq(treasury.balance, 0, "team receives nothing from sweep");
+        assertEq(mint.pendingBnb(), 0, "pending BNB 0 after sweep");
     }
 
     function test_SweepTooEarlyReverts() public {
@@ -98,8 +98,8 @@ contract RefundFailTest is BaishouTest {
         uint256 bobBefore = bob.balance;
         vm.prank(alice);
         mint.claimRefund();
-        assertEq(bob.balance, bobBefore, "klaim alice tidak menyentuh bob");
-        assertGt(mint.deposits(bob), 0, "deposit bob tetap menunggu klaimnya sendiri");
+        assertEq(bob.balance, bobBefore, "alice claim does not touch bob");
+        assertGt(mint.deposits(bob), 0, "bob deposit still awaits its own claim");
     }
 
     function test_PauseNeverBlocksRefunds() public {
@@ -110,6 +110,6 @@ contract RefundFailTest is BaishouTest {
         uint256 before = alice.balance;
         vm.prank(alice);
         mint.claimRefund();
-        assertEq(alice.balance, before + 10 * 0.00168 ether, "pause tidak blokir refund");
+        assertEq(alice.balance, before + 10 * 0.00168 ether, "pause does not block refund");
     }
 }

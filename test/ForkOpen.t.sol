@@ -28,7 +28,7 @@ contract ForkOpenTest is BaishouTest {
 
         uint256 sharesPerAgent = mint.MAX_PER_TX(); // 168
         uint256 cost168 = mint.costOf(sharesPerAgent);
-        assertEq(cost168, sharesPerAgent * mint.BASE_PRICE(), "harga flat pre-pool");
+        assertEq(cost168, sharesPerAgent * mint.BASE_PRICE(), "flat price pre-pool");
 
         // Gas metering is disabled ONLY for this mass loop: 168.000
         // real share-iterations ≈ 1,62 billion gas, above the default forge
@@ -47,10 +47,10 @@ contract ForkOpenTest is BaishouTest {
         vm.resumeGasMetering();
 
         // ---- The pool must already be open EXACTLY at share 168.000 ----
-        assertTrue(mint.opened(), "pool buka di share 168.000 (loop nyata)");
-        assertTrue(token.tradingEnabled(), "trading dibuka");
+        assertTrue(mint.opened(), "pool opens at share 168.000 (real loop)");
+        assertTrue(token.tradingEnabled(), "trading opened");
         assertEq(mint.totalMinted(), mint.OPEN_AT(), "totalMinted = OPEN_AT");
-        assertEq(mint.participantCount(), AGENTS, "1.000 peserta unik terdaftar");
+        assertEq(mint.participantCount(), AGENTS, "1.000 unique participants registered");
 
         // ---- Numbers from contract constants, cross-checked against literals ----
         uint256 totalDeposits = uint256(mint.OPEN_AT()) * mint.BASE_PRICE();
@@ -62,19 +62,19 @@ contract ForkOpenTest is BaishouTest {
         assertEq(mint.totalPaid(), totalDeposits, "totalPaid = total deposit");
 
         // Treasury: the 15% escrow is paid ONCE at _open (not via claim).
-        assertEq(treasury.balance, expectedTreasury, "treasury terima 42,336 BNB saat pool buka");
-        assertEq(mint.escrowTreasury(), 0, "escrow treasury lunas saat _open");
+        assertEq(treasury.balance, expectedTreasury, "treasury receives 42,336 BNB when pool opens");
+        assertEq(mint.escrowTreasury(), 0, "treasury escrow settled at _open");
         vm.prank(treasury);
         vm.expectRevert(AgentMint.NothingOwed.selector);
         mint.claimTreasury();
 
         // Referral: the 5% is NOT paid at _open; PULL claim by the referrer.
-        assertEq(mint.referralAccrued(refking), expectedReferral, "akrual referral 14,112 BNB");
+        assertEq(mint.referralAccrued(refking), expectedReferral, "referral accrual 14,112 BNB");
         uint256 refBefore = refking.balance;
         vm.prank(refking);
         mint.claimReferral();
-        assertEq(refking.balance, refBefore + expectedReferral, "referrer klaim 14,112 BNB penuh");
-        assertEq(mint.referralAccrued(refking), 0, "akrual referral habis");
+        assertEq(refking.balance, refBefore + expectedReferral, "referrer claims full 14,112 BNB");
+        assertEq(mint.referralAccrued(refking), 0, "referral accrual depleted");
 
         // Pool: 80% + pool tokens exactly as the constants.
         (uint256 rBnb, uint256 rToken) = mint.reserves();
@@ -86,9 +86,9 @@ contract ForkOpenTest is BaishouTest {
         assertEq(
             token.balanceOf(_agentAt(0)),
             sharesPerAgent * mint.USER_SHARE(),
-            "agen pertama: 168 x 168 jt token"
+            "first agent: 168 x 168M tokens"
         );
-        assertEq(mint.deposits(_agentAt(0)), cost168, "deposit agen pertama tercatat penuh");
+        assertEq(mint.deposits(_agentAt(0)), cost168, "first agent deposit fully recorded");
 
         // ---- claimTreasury works for POST-pool accrual ----
         address late = _agentAt(9_999);
@@ -99,11 +99,11 @@ contract ForkOpenTest is BaishouTest {
         vm.prank(late);
         mint.mint{value: costPost}(1, address(0), costPost);
         uint256 accruedPost = costPost * mint.TREASURY_BPS() / 10_000;
-        assertEq(mint.escrowTreasury(), accruedPost, "15% mint pasca-pool terakru");
+        assertEq(mint.escrowTreasury(), accruedPost, "15% post-pool mint accrues");
         uint256 treasuryBefore = treasury.balance;
         vm.prank(treasury);
         mint.claimTreasury();
-        assertEq(treasury.balance, treasuryBefore + accruedPost, "claimTreasury bayar akrual pasca-pool");
-        assertEq(mint.escrowTreasury(), 0, "escrow kosong sesudah claimTreasury");
+        assertEq(treasury.balance, treasuryBefore + accruedPost, "claimTreasury pays post-pool accrual");
+        assertEq(mint.escrowTreasury(), 0, "escrow empty after claimTreasury");
     }
 }

@@ -26,11 +26,11 @@ contract ForkDividendTest is BaishouTest {
         // --- Pool opens via the real path: alice 168 shares + fill 999 agents ---
         _mintAs(alice, 168, address(0));
         _fillToOpen(address(0));
-        assertTrue(mint.opened(), "pool buka di OPEN_AT (jalur nyata)");
+        assertTrue(mint.opened(), "pool opens at OPEN_AT (real path)");
         // The 15% treasury escrow of 282,24 is paid ONCE at _open.
-        assertEq(treasury.balance, 42.336 ether, "treasury 15% dibayar saat pool buka");
+        assertEq(treasury.balance, 42.336 ether, "treasury 15% paid when pool opens");
         (uint256 rBnb0, uint256 rToken0) = mint.reserves();
-        assertEq(rBnb0, 239.904 ether, "pool BNB = 85% x 282,24 (tanpa referrer)");
+        assertEq(rBnb0, 239.904 ether, "pool BNB = 85% x 282,24 (no referrer)");
         assertEq(rToken0, mint.OPEN_TOKENS(), "pool token = OPEN_TOKENS");
 
         // --- Bob BUYS through pair.swap(): WBNB in, tokens out ---
@@ -44,8 +44,8 @@ contract ForkDividendTest is BaishouTest {
         (uint256 out0, uint256 out1) =
             pair.token0() == address(token) ? (buyOut, uint256(0)) : (uint256(0), buyOut);
         pair.swap(out0, out1, bob, "");
-        assertEq(token.balanceOf(bob), buyOut * 9_800 / 10_000, "bob terima 98% (pajak beli 2%)");
-        assertEq(token.balanceOf(address(mint)), buyOut * 200 / 10_000, "pajak beli 2% di minter");
+        assertEq(token.balanceOf(bob), buyOut * 9_800 / 10_000, "bob receives 98% (buy tax 2%)");
+        assertEq(token.balanceOf(address(mint)), buyOut * 200 / 10_000, "buy tax 2% at minter");
 
         // --- swapTax() repeatedly (one per block) until the tax tokens run out:
         //     tax tokens -> BNB -> dividend pool. Not a direct deposit. ---
@@ -57,19 +57,19 @@ contract ForkDividendTest is BaishouTest {
                 swapped++;
             } catch {}
         }
-        assertEq(token.balanceOf(address(mint)), 0, "pajak beli habis terjual semua");
-        assertEq(swapped, 14, "PIN: 14x swapTax menghabiskan pajak beli 180 miliar");
-        assertGt(token.totalDividends(), 0, "BNB hasil swap pajak masuk dividend pool");
-        assertEq(feeTreasury.balance, 0, "feeTreasury tetap 0: pajak bukan buat tim");
+        assertEq(token.balanceOf(address(mint)), 0, "buy tax fully sold off");
+        assertEq(swapped, 14, "PIN: 14x swapTax spends the buy tax of 180 billion");
+        assertGt(token.totalDividends(), 0, "BNB from tax swap enters dividend pool");
+        assertEq(feeTreasury.balance, 0, "feeTreasury stays 0: tax is not for the team");
 
         // --- Alice (holder) claims above the minimum threshold ---
         uint256 due = token.withdrawableDividendOf(alice);
-        assertGe(due, token.MIN_DIVIDEND_CLAIM(), "dividen alice >= ambang 0,001 BNB");
-        assertGt(token.withdrawableDividendOf(bob), 0, "bob (pembeli) juga terakru pro-rata");
+        assertGe(due, token.MIN_DIVIDEND_CLAIM(), "alice dividend >= threshold 0,001 BNB");
+        assertGt(token.withdrawableDividendOf(bob), 0, "bob (buyer) also accrues pro-rata");
         uint256 before = alice.balance;
         vm.prank(alice);
         token.claimDividend();
-        assertEq(alice.balance, before + due, "klaim membayar PERSIS withdrawable");
-        assertEq(token.withdrawableDividendOf(alice), 0, "tidak bisa klaim ganda");
+        assertEq(alice.balance, before + due, "claim pays EXACTLY the withdrawable amount");
+        assertEq(token.withdrawableDividendOf(alice), 0, "cannot double-claim");
     }
 }

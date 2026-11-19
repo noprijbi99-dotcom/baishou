@@ -12,16 +12,16 @@ import {AgentToken} from "../src/AgentToken.sol";
 contract MintTest is BaishouTest {
     function test_FlatPricePrePool() public view {
         assertEq(mint.costOf(1), 0.00168 ether, "1 share pre-pool = 0,00168 BNB");
-        assertEq(mint.costOf(168), 168 * 0.00168 ether, "harga flat s.d. 168.000 share");
+        assertEq(mint.costOf(168), 168 * 0.00168 ether, "flat price up to 168.000 shares");
         assertEq(mint.priceUnits(1), 100, "units flat pre-pool");
-        assertEq(mint.priceUnits(168_000), 100, "units flat di share terakhir pre-pool");
+        assertEq(mint.priceUnits(168_000), 100, "units flat at last pre-pool share");
     }
 
     function test_Cap168PerAddress() public {
         uint256 cost = mint.costOf(168);
         vm.prank(alice);
         mint.mint{value: cost}(168, address(0), cost);
-        assertEq(mint.mintedCount(ALICE_ID), 168, "cap tercapai");
+        assertEq(mint.mintedCount(ALICE_ID), 168, "cap reached");
         uint256 cost1 = mint.costOf(1);
         vm.prank(alice);
         vm.expectRevert(AgentMint.Quota.selector);
@@ -40,10 +40,10 @@ contract MintTest is BaishouTest {
         uint256 bobBefore = bob.balance;
         vm.prank(alice);
         mint.mint{value: cost}(1, bob, cost);
-        assertEq(bob.balance, bobBefore, "referral ditahan escrow sampai pool buka");
-        assertEq(mint.referralAccrued(bob), cost * 500 / 10_000, "5% terakru buat referrer");
-        assertEq(mint.escrowTreasury(), cost * 1_500 / 10_000, "15% terakru buat treasury");
-        assertEq(mint.pendingBnb(), cost * 8_000 / 10_000, "80% ke pool");
+        assertEq(bob.balance, bobBefore, "referral held in escrow until pool opens");
+        assertEq(mint.referralAccrued(bob), cost * 500 / 10_000, "5% accrues for referrer");
+        assertEq(mint.escrowTreasury(), cost * 1_500 / 10_000, "15% accrues for treasury");
+        assertEq(mint.pendingBnb(), cost * 8_000 / 10_000, "80% to pool");
     }
 
     function test_TreasuryNotPaidInstantly() public {
@@ -51,10 +51,10 @@ contract MintTest is BaishouTest {
         uint256 treasuryBefore = treasury.balance;
         vm.prank(alice);
         mint.mint{value: cost}(1, address(0), cost);
-        assertEq(treasury.balance, treasuryBefore, "treasury ditahan escrow sampai pool buka");
-        assertEq(mint.escrowTreasury(), cost * 1_500 / 10_000, "15% terakru");
+        assertEq(treasury.balance, treasuryBefore, "treasury held in escrow until pool opens");
+        assertEq(mint.escrowTreasury(), cost * 1_500 / 10_000, "15% accrues");
         // Without a valid referrer, the 5% referral falls to the pool: pending = 85%.
-        assertEq(mint.pendingBnb(), cost * 8_500 / 10_000, "85% ke pool tanpa referrer");
+        assertEq(mint.pendingBnb(), cost * 8_500 / 10_000, "85% to pool without referrer");
     }
 
     function test_ReferralToSelfOrStrangerFallsToPool() public {
@@ -62,13 +62,13 @@ contract MintTest is BaishouTest {
         uint256 cost = mint.costOf(1);
         vm.prank(alice);
         mint.mint{value: cost}(1, alice, cost);
-        assertEq(mint.referralAccrued(alice), 0, "self-referral tidak dapat komisi");
-        assertEq(mint.pendingBnb(), cost * 8_500 / 10_000, "5% jatuh ke pool");
+        assertEq(mint.referralAccrued(alice), 0, "self-referral gets no commission");
+        assertEq(mint.pendingBnb(), cost * 8_500 / 10_000, "5% falls to pool");
         // Referrer without an Agent ID -> invalid -> 5% to the pool.
         uint256 cost2 = mint.costOf(1);
         vm.prank(bob);
         mint.mint{value: cost2}(1, stranger, cost2);
-        assertEq(mint.referralAccrued(stranger), 0, "stranger bukan referrer valid");
+        assertEq(mint.referralAccrued(stranger), 0, "stranger is not a valid referrer");
     }
 
     // The 24-hour gate + opening to all wallets was CANCELLED 19 Nov 06:20 UTC.
@@ -92,7 +92,7 @@ contract MintTest is BaishouTest {
 
         // Agent ID holders can still mint at any time while the sale runs.
         _mintAs(alice, 1, address(0));
-        assertEq(mint.mintedCount(ALICE_ID), 1, "Agent ID tetap bisa mint");
+        assertEq(mint.mintedCount(ALICE_ID), 1, "Agent ID can still mint");
 
         // Even after the pool opens, a stranger still cannot mint.
         _openPool(bob);
@@ -107,9 +107,9 @@ contract MintTest is BaishouTest {
         vm.prank(alice);
         mint.freeMint();
         assertEq(token.balanceOf(alice), 168_000_000 ether, "free = 168.000.000 token");
-        assertEq(alice.balance, aliceBefore, "free tanpa BNB");
-        assertEq(mint.freeClaimed(), 1, "1 klaim tercatat");
-        assertTrue(mint.claimedFree(ALICE_ID), "alice sudah klaim");
+        assertEq(alice.balance, aliceBefore, "free without BNB");
+        assertEq(mint.freeClaimed(), 1, "1 claim recorded");
+        assertTrue(mint.claimedFree(ALICE_ID), "alice already claimed");
 
         vm.prank(alice);
         vm.expectRevert(AgentMint.AlreadyGranted.selector);
@@ -123,11 +123,11 @@ contract MintTest is BaishouTest {
     function test_FreeMintDoesNotReduceBuyCap() public {
         vm.prank(alice);
         mint.freeMint();
-        assertEq(mint.mintedCount(ALICE_ID), 0, "free tidak menambah mintedCount");
+        assertEq(mint.mintedCount(ALICE_ID), 0, "free does not add to mintedCount");
         uint256 cost = mint.costOf(168);
         vm.prank(alice);
         mint.mint{value: cost}(168, address(0), cost);
-        assertEq(mint.mintedCount(ALICE_ID), 168, "tetap bisa mint 168 penuh");
+        assertEq(mint.mintedCount(ALICE_ID), 168, "can still mint full 168");
         assertEq(token.balanceOf(alice), 169 * 168_000_000 ether, "free + 168 paid");
     }
 
@@ -148,7 +148,7 @@ contract MintTest is BaishouTest {
         uint256 cost = mint.costOf(168);
         vm.prank(admin);
         mint.mint{value: cost}(168, address(0), cost);
-        assertEq(mint.mintedCount(uint256(keccak256(bytes("admin")))), 168, "admin mentok 168");
+        assertEq(mint.mintedCount(uint256(keccak256(bytes("admin")))), 168, "admin capped at 168");
         uint256 cost1 = mint.costOf(1);
         vm.prank(admin);
         vm.expectRevert(AgentMint.Quota.selector);
@@ -160,10 +160,10 @@ contract MintTest is BaishouTest {
         // Bob never minted: 1 post-pool share, the price has risen
         // (epoch 1 -> 102 units), but tokens stay 168.000.000/share.
         uint256 cost = mint.costOf(1);
-        assertGt(cost, 0.00168 ether, "harga pasca-pool naik dari flat");
+        assertGt(cost, 0.00168 ether, "post-pool price rises from flat");
         vm.prank(bob);
         mint.mint{value: cost}(1, address(0), cost);
-        assertEq(token.balanceOf(bob), 168_000_000 ether, "tetap 168 jt/share walau harga naik");
+        assertEq(token.balanceOf(bob), 168_000_000 ether, "stays 168M/share even as price rises");
     }
 
     function test_MaxSupplyRevert() public {

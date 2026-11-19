@@ -27,7 +27,7 @@ contract SaleClockTest is BaishouTest {
     // BaishouTest setUp already calls startSale() at the deploy timestamp.
 
     function test_StartSaleTwiceReverts() public {
-        assertGt(mint.saleStartTime(), 0, "sale sudah dimulai di setUp");
+        assertGt(mint.saleStartTime(), 0, "sale already started in setUp");
         vm.prank(admin);
         vm.expectRevert(AgentMint.AlreadyStarted.selector);
         mint.startSale();
@@ -41,37 +41,37 @@ contract SaleClockTest is BaishouTest {
 
     function test_FailureBoundaryExactly14Days() public {
         uint256 start = mint.saleStartTime();
-        assertEq(mint.failureTime(), start + 14 days, "deadline = start + 14 hari");
+        assertEq(mint.failureTime(), start + 14 days, "deadline = start + 14 days");
         vm.warp(start + 14 days);
-        assertFalse(mint.saleFailed(), "di tepat deadline: BELUM gagal (strict >)");
+        assertFalse(mint.saleFailed(), "exactly at deadline: NOT failed yet (strict >)");
         vm.warp(start + 14 days + 1);
-        assertTrue(mint.saleFailed(), "deadline + 1 detik: gagal");
+        assertTrue(mint.saleFailed(), "deadline + 1 second: failed");
     }
 
     function test_Refund100PercentUnderNewClock() public {
         _mintAs(alice, 10, address(0)); // 0,0168 BNB
         vm.warp(mint.saleStartTime() + 14 days + 1);
-        assertTrue(mint.saleFailed(), "gagal di jam baru");
+        assertTrue(mint.saleFailed(), "fails in the new clock");
         uint256 before = alice.balance;
         vm.prank(alice);
         mint.claimRefund();
-        assertEq(alice.balance, before + 0.0168 ether, "refund 100% di jam v2");
-        assertEq(mint.deposits(alice), 0, "deposit lunas");
+        assertEq(alice.balance, before + 0.0168 ether, "refund 100% in the v2 clock");
+        assertEq(mint.deposits(alice), 0, "deposit settled");
     }
 
     function test_OpenMidWindow_KillsFailure_ClosesAtPostPoolWindow() public {
         uint256 start = mint.saleStartTime();
         vm.warp(start + 10 days); // day 10 of 14: still within the window
         _openPool(alice);
-        assertTrue(mint.opened(), "pool buka hari ke-10");
+        assertTrue(mint.opened(), "pool opens on day 10");
         uint256 openedAt = mint.openedTime();
         // Pass failureTime: saleFailed must NOT be true (the pool has opened).
         vm.warp(start + 14 days + 1);
-        assertFalse(mint.saleFailed(), "pool sudah buka -> tidak gagal");
-        assertFalse(mint.mintClosed(), "belum tutup: openedTime+7d belum lewat");
+        assertFalse(mint.saleFailed(), "pool already open -> not failed");
+        assertFalse(mint.mintClosed(), "not closed: openedTime+7d not yet passed");
         // mintClosed falls at openedTime + 7 days (POST_POOL_WINDOW).
         vm.warp(openedAt + 7 days + 1);
-        assertTrue(mint.mintClosed(), "tutup di openedTime + 7 hari");
+        assertTrue(mint.mintClosed(), "closes at openedTime + 7 days");
     }
 }
 
@@ -116,14 +116,14 @@ contract SaleClockUnstartedTest is Test {
     }
 
     function test_ClockNeverRunsBeforeStart() public {
-        assertTrue(mint.paused(), "lahir paused");
-        assertEq(mint.saleStartTime(), 0, "sale belum dimulai");
-        assertEq(mint.failureTime(), 0, "tidak ada deadline sebelum start");
-        assertGt(mint.deployTime(), 0, "deployTime tetap tercatat (informational)");
+        assertTrue(mint.paused(), "born paused");
+        assertEq(mint.saleStartTime(), 0, "sale not started yet");
+        assertEq(mint.failureTime(), 0, "no deadline before start");
+        assertGt(mint.deployTime(), 0, "deployTime stays recorded (informational)");
         // Warp a FULL YEAR: without a start, there is no time bomb.
         vm.warp(block.timestamp + 365 days);
-        assertFalse(mint.saleFailed(), "365 hari tanpa start: TIDAK gagal");
-        assertEq(mint.failureTime(), 0, "deadline tetap 0");
+        assertFalse(mint.saleFailed(), "365 days without start: NOT failed");
+        assertEq(mint.failureTime(), 0, "deadline stays 0");
         // Mint stays blocked by pause (not SoldOut — the clock is not running).
         uint256 cost = mint.costOf(1);
         vm.prank(alice);
@@ -139,13 +139,13 @@ contract SaleClockUnstartedTest is Test {
         vm.prank(admin);
         mint.startSale();
         uint256 start = mint.saleStartTime();
-        assertEq(start, block.timestamp, "start = saat startSale dipanggil");
-        assertEq(mint.failureTime(), start + 14 days, "jendela 14 hari BARU mulai");
-        assertFalse(mint.saleFailed(), "tidak gagal di hari mulai");
+        assertEq(start, block.timestamp, "start = when startSale is called");
+        assertEq(mint.failureTime(), start + 14 days, "14-day window JUST started");
+        assertFalse(mint.saleFailed(), "not failed on start day");
         // The sale works normally after waiting a year.
         uint256 cost = mint.costOf(1);
         vm.prank(alice);
         mint.mint{value: cost}(1, address(0), cost);
-        assertEq(mint.totalMinted(), 1, "mint jalan sesudah startSale");
+        assertEq(mint.totalMinted(), 1, "mint works after startSale");
     }
 }

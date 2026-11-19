@@ -15,23 +15,23 @@ contract RefundExitTest is BaishouTest {
         uint256 before = alice.balance;
         vm.prank(alice);
         mint.exit(10);
-        assertEq(alice.balance, before + 0.0168 ether * 80 / 100, "kembali 80%");
-        assertEq(mint.forfeitOf(alice), 0.0168 ether * 20 / 100, "20% forfeit tercatat");
-        assertEq(mint.forfeitPool(), 0.0168 ether * 20 / 100, "forfeit pool terakumulasi");
-        assertEq(mint.mintedCount(ALICE_ID), 0, "share alice habis");
-        assertEq(mint.totalMinted(), 0, "totalMinted turun");
-        assertEq(token.balanceOf(alice), 0, "token alice dibakar");
-        assertEq(mint.deposits(alice), 0, "deposit alice habis");
+        assertEq(alice.balance, before + 0.0168 ether * 80 / 100, "returns 80%");
+        assertEq(mint.forfeitOf(alice), 0.0168 ether * 20 / 100, "20% forfeit recorded");
+        assertEq(mint.forfeitPool(), 0.0168 ether * 20 / 100, "forfeit pool accumulated");
+        assertEq(mint.mintedCount(ALICE_ID), 0, "alice shares depleted");
+        assertEq(mint.totalMinted(), 0, "totalMinted decreases");
+        assertEq(token.balanceOf(alice), 0, "alice tokens burned");
+        assertEq(mint.deposits(alice), 0, "alice deposit depleted");
     }
 
     function test_ExitBurnsSharesAndTokens() public {
         _mintAs(alice, 5, address(0));
         vm.prank(alice);
         mint.exit(2);
-        assertEq(mint.mintedCount(ALICE_ID), 3, "sisa 3 share");
+        assertEq(mint.mintedCount(ALICE_ID), 3, "3 shares remaining");
         assertEq(mint.totalMinted(), 3, "total 3 share");
-        assertEq(token.balanceOf(alice), 3 * 168_000_000 ether, "sisa 3 x 168 jt token");
-        assertEq(mint.deposits(alice), 3 * 0.00168 ether, "deposit sisa 3 share");
+        assertEq(token.balanceOf(alice), 3 * 168_000_000 ether, "remaining 3 x 168M tokens");
+        assertEq(mint.deposits(alice), 3 * 0.00168 ether, "deposit remaining 3 shares");
     }
 
     function test_ExitForfeitToLpConditionally() public {
@@ -43,8 +43,8 @@ contract RefundExitTest is BaishouTest {
         // Forfeit joins as bonus liquidity on top of OPEN_BNB.
         assertEq(wbnb.balanceOf(address(_pair())), mint.OPEN_BNB() + forfeit, "LP + forfeit");
         (uint256 rBnb,) = mint.reserves();
-        assertEq(rBnb, mint.OPEN_BNB() + forfeit, "reserve BNB termasuk forfeit");
-        assertEq(mint.forfeitPool(), 0, "forfeit pool kosong sesudah _open");
+        assertEq(rBnb, mint.OPEN_BNB() + forfeit, "reserve BNB includes forfeit");
+        assertEq(mint.forfeitPool(), 0, "forfeit pool empty after _open");
     }
 
     function test_ExitForfeitReturnedIfLaunchFails() public {
@@ -53,12 +53,12 @@ contract RefundExitTest is BaishouTest {
         mint.exit(10);
         uint256 forfeit = 0.0168 ether * 20 / 100;
         vm.warp(vm.getBlockTimestamp() + 14 days + 1);
-        assertTrue(mint.saleFailed(), "launch gagal");
+        assertTrue(mint.saleFailed(), "launch failed");
         uint256 before = alice.balance;
         vm.prank(alice);
         mint.claimRefund();
-        assertEq(alice.balance, before + forfeit, "forfeit 20% kembali");
-        assertEq(mint.forfeitOf(alice), 0, "forfeit habis diklaim");
+        assertEq(alice.balance, before + forfeit, "forfeit 20% returned");
+        assertEq(mint.forfeitOf(alice), 0, "forfeit fully claimed");
         // Total back: 80% (exit) + 20% (refund) = 100% of 0,0168.
     }
 
@@ -87,7 +87,7 @@ contract RefundExitTest is BaishouTest {
         uint256 before = alice.balance;
         vm.prank(alice);
         mint.exit(5);
-        assertEq(alice.balance, before + 5 * 0.00168 ether * 80 / 100, "pause tidak blokir exit");
+        assertEq(alice.balance, before + 5 * 0.00168 ether * 80 / 100, "pause does not block exit");
     }
 
     function test_ExitMoreThanOwnedReverts() public {
@@ -106,8 +106,8 @@ contract RefundExitTest is BaishouTest {
         _mintAs(alice, 10, bob);
         vm.prank(alice);
         mint.exit(10);
-        assertEq(mint.escrowTreasury(), 0, "escrow treasury kembali 0");
-        assertEq(mint.referralAccrued(bob), 0, "akrual referral kembali 0");
-        assertEq(mint.pendingBnb(), 0, "pending BNB kembali 0");
+        assertEq(mint.escrowTreasury(), 0, "treasury escrow back to 0");
+        assertEq(mint.referralAccrued(bob), 0, "referral accrual back to 0");
+        assertEq(mint.pendingBnb(), 0, "pending BNB back to 0");
     }
 }

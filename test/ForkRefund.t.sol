@@ -22,36 +22,36 @@ contract ForkRefundTest is BaishouTest {
         _mintAs(alice, 100, address(0)); // 0,168 BNB
         _mintAs(bob, 50, alice); // 0,084 BNB, 5% accrues to alice
         _mintAs(carol, 20, address(0)); // 0,0336 BNB
-        assertEq(mint.referralAccrued(alice), 0.0042 ether, "referral bob 5% terakru ke alice");
+        assertEq(mint.referralAccrued(alice), 0.0042 ether, "bob referral 5% accrues to alice");
 
         // --- Phase 2: exit — carol exits FULLY, alice exits PARTIALLY ---
         uint256 carolBefore = carol.balance;
         vm.prank(carol);
         mint.exit(20);
-        assertEq(carol.balance, carolBefore + 0.02688 ether, "exit carol: kembali 80% persis");
-        assertEq(mint.forfeitOf(carol), 0.00672 ether, "forfeit carol 20% tercatat");
+        assertEq(carol.balance, carolBefore + 0.02688 ether, "exit carol: returns exactly 80%");
+        assertEq(mint.forfeitOf(carol), 0.00672 ether, "carol forfeit 20% recorded");
 
         uint256 aliceBefore = alice.balance;
         vm.prank(alice);
         mint.exit(40);
-        assertEq(alice.balance, aliceBefore + 0.05376 ether, "exit alice 40: kembali 80% persis");
-        assertEq(mint.forfeitOf(alice), 0.01344 ether, "forfeit alice 20% tercatat");
-        assertEq(mint.deposits(alice), 0.1008 ether, "deposit alice sisa 60 share");
-        assertEq(mint.deposits(bob), 0.084 ether, "deposit bob utuh");
+        assertEq(alice.balance, aliceBefore + 0.05376 ether, "exit alice 40: returns exactly 80%");
+        assertEq(mint.forfeitOf(alice), 0.01344 ether, "alice forfeit 20% recorded");
+        assertEq(mint.deposits(alice), 0.1008 ether, "alice deposit remaining 60 shares");
+        assertEq(mint.deposits(bob), 0.084 ether, "bob deposit intact");
 
         // --- Mid-way solvency proof: contract WBNB balance ==
         //     total refund obligations (deposits + forfeit of all users). ---
-        assertEq(_totalObligations(), 0.20496 ether, "total kewajiban 0,20496 BNB");
+        assertEq(_totalObligations(), 0.20496 ether, "total obligations 0,20496 BNB");
         assertEq(
             wbnb.balanceOf(address(mint)),
             _totalObligations(),
-            "escrow menutup 100% kewajiban refund"
+            "escrow covers 100% of refund obligations"
         );
-        assertEq(treasury.balance, 0, "treasury belum terima apa pun");
+        assertEq(treasury.balance, 0, "treasury has received nothing yet");
 
         // --- Phase 3: deadline passes without the target -> launch FAILS ---
         vm.warp(mint.failureTime() + 1);
-        assertTrue(mint.saleFailed(), "launch gagal");
+        assertTrue(mint.saleFailed(), "launch failed");
 
         // Referral still CANNOT be claimed: the pool never opened.
         vm.prank(alice);
@@ -67,35 +67,35 @@ contract ForkRefundTest is BaishouTest {
         uint256 b0 = bob.balance;
         vm.prank(bob);
         mint.claimRefund();
-        assertEq(bob.balance, b0 + 0.084 ether, "refund bob = deposit penuh (tidak pernah exit)");
+        assertEq(bob.balance, b0 + 0.084 ether, "refund bob = full deposit (never exited)");
 
         uint256 c0 = carol.balance;
         vm.prank(carol);
         mint.claimRefund();
-        assertEq(carol.balance, c0 + 0.00672 ether, "refund carol = forfeit saja (sudah exit penuh)");
+        assertEq(carol.balance, c0 + 0.00672 ether, "refund carol = forfeit only (already fully exited)");
 
         // Final position: all obligations settled, contract empty.
-        assertEq(_totalObligations(), 0, "kewajiban refund lunas semua");
-        assertEq(wbnb.balanceOf(address(mint)), 0, "escrow kontrak kosong total");
-        assertEq(treasury.balance, 0, "treasury tetap 0 pada launch gagal");
+        assertEq(_totalObligations(), 0, "refund obligations all settled");
+        assertEq(wbnb.balanceOf(address(mint)), 0, "contract escrow totally empty");
+        assertEq(treasury.balance, 0, "treasury stays 0 on failed launch");
     }
 
     function test_ExitFullPositionWithReferrerUnwindsEscrow() public {
         // A minter with a referrer exits FULLY: the already-accrued treasury + referral
         // cuts must roll back too, not hang.
         _mintAs(alice, 168, bob);
-        assertGt(mint.escrowTreasury(), 0, "escrow treasury terisi");
-        assertGt(mint.referralAccrued(bob), 0, "akrual referral terisi");
+        assertGt(mint.escrowTreasury(), 0, "treasury escrow filled");
+        assertGt(mint.referralAccrued(bob), 0, "referral accrual filled");
         uint256 before = alice.balance;
         vm.prank(alice);
         mint.exit(168);
-        assertEq(alice.balance, before + 0.225792 ether, "exit 168: 80% dari 0,28224");
-        assertEq(mint.escrowTreasury(), 0, "escrow treasury mundur ke 0");
-        assertEq(mint.referralAccrued(bob), 0, "akrual referral mundur ke 0");
-        assertEq(mint.pendingBnb(), 0, "pending BNB mundur ke 0");
-        assertEq(mint.forfeitPool(), 0.056448 ether, "forfeit 20% utuh di pool kondisional");
+        assertEq(alice.balance, before + 0.225792 ether, "exit 168: 80% of 0,28224");
+        assertEq(mint.escrowTreasury(), 0, "treasury escrow back to 0");
+        assertEq(mint.referralAccrued(bob), 0, "referral accrual back to 0");
+        assertEq(mint.pendingBnb(), 0, "pending BNB back to 0");
+        assertEq(mint.forfeitPool(), 0.056448 ether, "forfeit 20% intact in conditional pool");
         // Solvency: what remains in the contract == forfeit (the only refund
         // obligation left).
-        assertEq(wbnb.balanceOf(address(mint)), mint.forfeitOf(alice), "sisa escrow == forfeit alice");
+        assertEq(wbnb.balanceOf(address(mint)), mint.forfeitOf(alice), "remaining escrow == alice forfeit");
     }
 }

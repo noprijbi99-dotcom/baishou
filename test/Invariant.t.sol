@@ -101,7 +101,7 @@ contract BaishouInvariantTest is BaishouTest {
         assertGe(
             wbnb.balanceOf(address(mint)),
             obligations,
-            "escrow WBNB < total kewajiban refund"
+            "escrow WBNB < total refund obligations"
         );
     }
 

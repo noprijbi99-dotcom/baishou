@@ -64,24 +64,24 @@ contract Wave3PinTest is BaishouTest {
 
         // Initial anchor (literal): trigger mint of 1 flat share -> 15% cut =
         // 0,000252 BNB paid to treasury at _open; escrow back to 0.
-        assertEq(treasury.balance, 0.000252 ether, "cut trigger dibayar saat open");
-        assertEq(mint.escrowTreasury(), 0, "prasyarat: escrow 0 sesudah open");
+        assertEq(treasury.balance, 0.000252 ether, "cut trigger paid at open");
+        assertEq(mint.escrowTreasury(), 0, "prerequisite: escrow 0 after open");
 
         // Post-pool mint: 100 shares by bob = shares #168.001..#168.100,
         // all epoch 1 -> units 102 -> 0,0017136 BNB/share.
         uint256 firstShare = 168_001;
         uint256 shares = 100;
         uint256 expectedCost = _specCost(firstShare, shares);
-        assertEq(expectedCost, 0.17136 ether, "PIN W2: biaya spek 100 share epoch-1");
+        assertEq(expectedCost, 0.17136 ether, "PIN W2: spec cost 100 shares epoch-1");
         uint256 expectedTreasury = _specTreasury(firstShare, shares);
-        assertEq(expectedTreasury, 0.025704 ether, "PIN W2: akrual spek = 15% x 0,17136");
+        assertEq(expectedTreasury, 0.025704 ether, "PIN W2: spec accrual = 15% x 0,17136");
 
         uint256 bobBefore = bob.balance;
         vm.prank(bob);
         mint.mint{value: expectedCost}(shares, address(0), expectedCost);
-        assertEq(bob.balance, bobBefore - expectedCost, "bob bayar persis biaya spek (refund 0)");
-        assertEq(token.balanceOf(bob), 16_800_000_000 ether, "bob terima 100 x 168 jt token");
-        assertEq(mint.escrowTreasury(), expectedTreasury, "escrow terakru = angka spek");
+        assertEq(bob.balance, bobBefore - expectedCost, "bob pays exactly the spec cost (refund 0)");
+        assertEq(token.balanceOf(bob), 16_800_000_000 ether, "bob receives 100 x 168M tokens");
+        assertEq(mint.escrowTreasury(), expectedTreasury, "accrued escrow = spec number");
 
         uint256 treasuryBefore = treasury.balance;
         vm.prank(treasury);
@@ -89,9 +89,9 @@ contract Wave3PinTest is BaishouTest {
         assertEq(
             treasury.balance,
             treasuryBefore + 0.025704 ether,
-            "PIN W2: claimTreasury membayar 0,025704 BNB persis"
+            "PIN W2: claimTreasury pays exactly 0,025704 BNB"
         );
-        assertEq(mint.escrowTreasury(), 0, "escrow habis sesudah klaim");
+        assertEq(mint.escrowTreasury(), 0, "escrow depleted after claim");
 
         vm.prank(treasury);
         vm.expectRevert(AgentMint.NothingOwed.selector);
@@ -145,11 +145,11 @@ contract Wave3PinTest is BaishouTest {
 
         uint256 aliceTokens = 28_224_000_000 ether; // 168 x 168.000.000 (literal)
         uint256 supply0 = 50_803_200_000_000 ether; // 28,224 T user + 22,5792 T pool
-        assertEq(token.balanceOf(alice), aliceTokens, "setup: saldo alice literal");
-        assertEq(token.totalSupply(), supply0, "setup: supply awal literal");
+        assertEq(token.balanceOf(alice), aliceTokens, "setup: alice balance literal");
+        assertEq(token.totalSupply(), supply0, "setup: initial supply literal");
         (uint256 rBnb0, uint256 rToken0) = mint.reserves();
-        assertEq(rBnb0, 239.904 ether, "setup: reserve BNB literal (jangkar model)");
-        assertEq(rToken0, 22_579_200_000_000 ether, "setup: reserve token literal (jangkar model)");
+        assertEq(rBnb0, 239.904 ether, "setup: reserve BNB literal (model anchor)");
+        assertEq(rToken0, 22_579_200_000_000 ether, "setup: reserve token literal (model anchor)");
 
         // ---- Bob BUYS 9 trillion tokens (gross) from the pair; pays 96 BNB ----
         vm.prank(bob);
@@ -161,8 +161,8 @@ contract Wave3PinTest is BaishouTest {
             pair.token0() == address(token) ? (buyGross, uint256(0)) : (uint256(0), buyGross);
         pair.swap(out0, out1, bob, "");
         // Spec buy split 2%: 180 billion to the minter, 8,82 trillion to bob.
-        assertEq(token.balanceOf(address(mint)), 180_000_000_000 ether, "setup: pajak beli 2%");
-        assertEq(token.balanceOf(bob), 8_820_000_000_000 ether, "setup: bob terima 98%");
+        assertEq(token.balanceOf(address(mint)), 180_000_000_000 ether, "setup: buy tax 2%");
+        assertEq(token.balanceOf(bob), 8_820_000_000_000 ether, "setup: bob receives 98%");
 
         // ---- Flush buy tax -> dividend pool (shadow model) ----
         uint256 rT = 13_579_200_000_000 ether; // 22_579_200_000_000 - 9_000_000_000_000
@@ -170,7 +170,7 @@ contract Wave3PinTest is BaishouTest {
         uint256 mdps;
         uint256 totalDep;
         (rT, rW, mdps, totalDep) = _flushTaxShadow(rT, rW, 180_000_000_000 ether, supply0, 0, 0);
-        assertEq(token.balanceOf(address(mint)), 0, "model: pajak beli habis terjual");
+        assertEq(token.balanceOf(address(mint)), 0, "model: buy tax fully sold");
 
         // ---- Bob SELLS 2 trillion tokens: spec split 1% burn + 1% kept ----
         // MODEL NOTE: the "burn" in AgentToken is a transfer to DEAD,
@@ -182,28 +182,28 @@ contract Wave3PinTest is BaishouTest {
         (uint256 w0, uint256 w1) =
             pair.token0() == address(wbnb) ? (uint256(20 ether), uint256(0)) : (uint256(0), uint256(20 ether));
         pair.swap(w0, w1, bob, ""); // bob takes 20 BNB (setup parameter)
-        assertEq(token.balanceOf(token.DEAD()), 20_000_000_000 ether, "setup: burn 1% parkir di DEAD");
-        assertEq(token.totalSupply(), supply0, "setup: supply tetap (burn = transfer ke DEAD)");
-        assertEq(token.balanceOf(address(mint)), 20_000_000_000 ether, "setup: kept 1% di minter");
+        assertEq(token.balanceOf(token.DEAD()), 20_000_000_000 ether, "setup: burn 1% parked at DEAD");
+        assertEq(token.totalSupply(), supply0, "setup: supply unchanged (burn = transfer to DEAD)");
+        assertEq(token.balanceOf(address(mint)), 20_000_000_000 ether, "setup: kept 1% at minter");
         rT += 1_960_000_000_000 ether; // net tokens into the pair (2 T - 1% - 1%)
         rW -= 20 ether;
 
         // ---- Flush sell tax -> dividend pool (denominator stays supply0) ----
         (rT, rW, mdps, totalDep) = _flushTaxShadow(rT, rW, 20_000_000_000 ether, supply0, mdps, totalDep);
-        assertEq(token.balanceOf(address(mint)), 0, "model: pajak jual habis terjual");
+        assertEq(token.balanceOf(address(mint)), 0, "model: sell tax fully sold");
         // Model validation: total deposits per the contract == per the shadow model.
-        assertEq(token.totalDividends(), totalDep, "model: total setoran dividen cocok");
+        assertEq(token.totalDividends(), totalDep, "model: total dividend deposits match");
 
         // ---- Alice's expectation: pure pro-rata over the shadow mdps ----
         // The pair holds ~35% of supply at this point and joins pro-rata —
         // already reflected because mdps divides over the FULL totalSupply.
         uint256 expected = aliceTokens * mdps / SPEC_MAGNITUDE;
-        assertEq(expected, 2_653_293_237_882_583, "PIN W4 (v2, pool nyata): ekspektasi literal 0,002653293237882583 BNB");
-        assertGe(expected, 0.001 ether, "ekspektasi di atas ambang klaim minimum");
+        assertEq(expected, 2_653_293_237_882_583, "PIN W4 (v2, real pool): literal expectation 0,002653293237882583 BNB");
+        assertGe(expected, 0.001 ether, "expectation above minimum claim threshold");
         uint256 before = alice.balance;
         vm.prank(alice);
         token.claimDividend();
-        assertEq(alice.balance, before + expected, "PIN W4: klaim alice == hitungan independen");
-        assertEq(token.withdrawableDividendOf(alice), 0, "habis diklaim, tidak bisa ganda");
+        assertEq(alice.balance, before + expected, "PIN W4: alice claim == independent calculation");
+        assertEq(token.withdrawableDividendOf(alice), 0, "fully claimed, cannot double");
     }
 }

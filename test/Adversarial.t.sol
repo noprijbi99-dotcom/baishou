@@ -99,14 +99,14 @@ contract AdversarialTest is BaishouTest {
         (ReentrantClaimer atk,) = _makeAttacker();
         atk.doMint(10, mint.costOf(10)); // deposit 0,0168 BNB
         vm.warp(mint.failureTime() + 1);
-        assertTrue(mint.saleFailed(), "launch gagal");
+        assertTrue(mint.saleFailed(), "launch failed");
         atk.arm(1); // reenter claimRefund during payout
         uint256 before = address(atk).balance;
         atk.doClaimRefund();
-        assertEq(atk.reentryAttempts(), 1, "satu percobaan reentrancy terjadi");
-        assertEq(atk.reentrySuccesses(), 0, "reentrancy claimRefund GAGAL");
-        assertEq(address(atk).balance, before + 0.0168 ether, "refund dibayar PERSIS sekali");
-        assertEq(mint.deposits(address(atk)), 0, "deposit lunas");
+        assertEq(atk.reentryAttempts(), 1, "one reentrancy attempt occurred");
+        assertEq(atk.reentrySuccesses(), 0, "reentrancy claimRefund FAILED");
+        assertEq(address(atk).balance, before + 0.0168 ether, "refund paid EXACTLY once");
+        assertEq(mint.deposits(address(atk)), 0, "deposit settled");
     }
 
     function test_Reentrancy_ClaimRefundCannotCrossIntoExit() public {
@@ -119,10 +119,10 @@ contract AdversarialTest is BaishouTest {
         atk.arm(2); // reenter exit(1) during the refund payout
         uint256 before = address(atk).balance;
         atk.doClaimRefund();
-        assertEq(atk.reentryAttempts(), 1, "percobaan cross-reentrancy terjadi");
-        assertEq(atk.reentrySuccesses(), 0, "cross-reentrancy ke exit GAGAL");
-        assertEq(address(atk).balance, before + 0.0168 ether, "total diterima TETAP 100%, tidak lebih");
-        assertEq(mint.mintedCount(atkId), 10, "exit reentrant tidak mengurangi share");
+        assertEq(atk.reentryAttempts(), 1, "cross-reentrancy attempt occurred");
+        assertEq(atk.reentrySuccesses(), 0, "cross-reentrancy into exit FAILED");
+        assertEq(address(atk).balance, before + 0.0168 ether, "total received STILL 100%, no more");
+        assertEq(mint.mintedCount(atkId), 10, "reentrant exit does not reduce shares");
     }
 
     function test_Reentrancy_ExitPaysExactlyOnce() public {
@@ -131,11 +131,11 @@ contract AdversarialTest is BaishouTest {
         atk.arm(2); // reenter exit(1) during the partial-exit payout
         uint256 before = address(atk).balance;
         atk.doExit(5); // exit 5 of 10 -> its entitlement is 80% x 5 x 0,00168
-        assertEq(atk.reentryAttempts(), 1, "percobaan reentrancy terjadi");
-        assertEq(atk.reentrySuccesses(), 0, "reentrancy exit GAGAL");
-        assertEq(address(atk).balance, before + 0.00672 ether, "exit dibayar PERSIS 80% x 5 share");
-        assertEq(mint.mintedCount(atkId), 5, "hanya 5 share luar yang ter-exit");
-        assertEq(mint.forfeitOf(address(atk)), 0.00168 ether, "forfeit hanya dari exit luar");
+        assertEq(atk.reentryAttempts(), 1, "reentrancy attempt occurred");
+        assertEq(atk.reentrySuccesses(), 0, "reentrancy exit FAILED");
+        assertEq(address(atk).balance, before + 0.00672 ether, "exit paid EXACTLY 80% x 5 shares");
+        assertEq(mint.mintedCount(atkId), 5, "only 5 external shares exited");
+        assertEq(mint.forfeitOf(address(atk)), 0.00168 ether, "forfeit only from external exit");
     }
 
     function test_Reentrancy_ClaimDividendPaysExactlyOnce() public {
@@ -149,14 +149,14 @@ contract AdversarialTest is BaishouTest {
         vm.prank(address(mint));
         token.depositDividends{value: 100 ether}();
         uint256 due = token.withdrawableDividendOf(address(atk));
-        assertGe(due, token.MIN_DIVIDEND_CLAIM(), "dividen penyerang di atas ambang klaim");
+        assertGe(due, token.MIN_DIVIDEND_CLAIM(), "attacker dividend above claim threshold");
         atk.arm(3); // reenter claimDividend during payout
         uint256 before = address(atk).balance;
         atk.doClaimDividend();
-        assertEq(atk.reentryAttempts(), 1, "percobaan reentrancy terjadi");
-        assertEq(atk.reentrySuccesses(), 0, "reentrancy dividen GAGAL (CEI)");
-        assertEq(address(atk).balance, before + due, "dividen dibayar PERSIS sekali");
-        assertEq(token.withdrawableDividendOf(address(atk)), 0, "tidak ada sisa yang bisa diklaim ulang");
+        assertEq(atk.reentryAttempts(), 1, "reentrancy attempt occurred");
+        assertEq(atk.reentrySuccesses(), 0, "reentrancy dividend FAILED (CEI)");
+        assertEq(address(atk).balance, before + due, "dividend paid EXACTLY once");
+        assertEq(token.withdrawableDividendOf(address(atk)), 0, "no remainder that can be re-claimed");
     }
 
     function test_Reentrancy_ClaimTreasuryPaysExactlyOnce() public {
@@ -216,20 +216,20 @@ contract AdversarialTest is BaishouTest {
         vm.prank(last);
         mint2.mint{value: costLast}(1, address(0), costLast);
         vm.resumeGasMetering();
-        assertTrue(mint2.opened(), "pool mint2 buka di OPEN_AT");
-        assertEq(address(atk).balance, 42.336 ether, "treasury terima 15% x 282,24 saat _open");
+        assertTrue(mint2.opened(), "mint2 pool opens at OPEN_AT");
+        assertEq(address(atk).balance, 42.336 ether, "treasury receives 15% x 282,24 at _open");
 
         uint256 cost1 = mint2.costOf(1); // share 168.001: epoch 1 = 0,0017136
         vm.prank(alice);
         mint2.mint{value: cost1}(1, address(0), cost1);
-        assertEq(mint2.escrowTreasury(), 0.00025704 ether, "akrual pasca-pool 15% x 0,0017136");
+        assertEq(mint2.escrowTreasury(), 0.00025704 ether, "post-pool accrual 15% x 0,0017136");
 
         atk.arm(4); // reenter claimTreasury during payout
         atk.doClaimTreasury();
-        assertEq(atk.reentryAttempts(), 1, "percobaan reentrancy terjadi");
-        assertEq(atk.reentrySuccesses(), 0, "reentrancy claimTreasury GAGAL");
-        assertEq(address(atk).balance, 42.336 ether + 0.00025704 ether, "klaim dibayar PERSIS sekali");
-        assertEq(mint2.escrowTreasury(), 0, "escrow treasury kosong");
+        assertEq(atk.reentryAttempts(), 1, "reentrancy attempt occurred");
+        assertEq(atk.reentrySuccesses(), 0, "reentrancy claimTreasury FAILED");
+        assertEq(address(atk).balance, 42.336 ether + 0.00025704 ether, "claim paid EXACTLY once");
+        assertEq(mint2.escrowTreasury(), 0, "treasury escrow empty");
         vm.expectRevert(AgentMint.NothingOwed.selector);
         atk.doClaimTreasury();
     }
@@ -238,7 +238,7 @@ contract AdversarialTest is BaishouTest {
 
     function test_ClaimTreasuryBeforeOpenReverts() public {
         _mintAs(alice, 10, address(0));
-        assertGt(mint.escrowTreasury(), 0, "escrow terisi pre-pool");
+        assertGt(mint.escrowTreasury(), 0, "escrow filled pre-pool");
         vm.prank(treasury);
         vm.expectRevert(AgentMint.NotOpen.selector);
         mint.claimTreasury();
