@@ -134,57 +134,62 @@ contract Wave3PinTest is BaishouTest {
     }
 
     function test_W4_DividendClaimMatchesIndependentComputation() public {
-        // ---- Setup deterministik: alice 168 share, pool buka kecil ----
+        // ---- Setup deterministik: pool buka via jalur NYATA (v2:
+        //      openEarly dihapus) — alice 168 share + fill 999 agen.
+        //      Supply total = user 28,224 T + pool 22,5792 T; seed pool
+        //      239,904 BNB (semua mint tanpa referrer). ----
         _mintAs(alice, 168, address(0));
-        vm.prank(admin);
-        mint.openEarly();
+        _fillToOpen(address(0));
         MockPair pair = _pair();
         address pairAddr = address(pair);
 
         uint256 aliceTokens = 28_224_000_000 ether; // 168 x 168.000.000 (literal)
-        uint256 supply0 = 50_803_200_000 ether; // alice + pair 22_579_200_000
+        uint256 supply0 = 50_803_200_000_000 ether; // 28,224 T user + 22,5792 T pool
         assertEq(token.balanceOf(alice), aliceTokens, "setup: saldo alice literal");
         assertEq(token.totalSupply(), supply0, "setup: supply awal literal");
+        (uint256 rBnb0, uint256 rToken0) = mint.reserves();
+        assertEq(rBnb0, 239.904 ether, "setup: reserve BNB literal (jangkar model)");
+        assertEq(rToken0, 22_579_200_000_000 ether, "setup: reserve token literal (jangkar model)");
 
-        // ---- Bob BELI 10 miliar token (gross) dari pair; bayar 10 BNB ----
+        // ---- Bob BELI 9 triliun token (gross) dari pair; bayar 96 BNB ----
         vm.prank(bob);
-        wbnb.deposit{value: 10 ether}();
+        wbnb.deposit{value: 96 ether}();
         vm.prank(bob);
-        wbnb.transfer(pairAddr, 10 ether);
-        uint256 buyGross = 10_000_000_000 ether;
+        wbnb.transfer(pairAddr, 96 ether);
+        uint256 buyGross = 9_000_000_000_000 ether;
         (uint256 out0, uint256 out1) =
             pair.token0() == address(token) ? (buyGross, uint256(0)) : (uint256(0), buyGross);
         pair.swap(out0, out1, bob, "");
-        // Split spek beli 2%: 200 jt ke minter, 9,8 miliar ke bob.
-        assertEq(token.balanceOf(address(mint)), 200_000_000 ether, "setup: pajak beli 2%");
-        assertEq(token.balanceOf(bob), 9_800_000_000 ether, "setup: bob terima 98%");
+        // Split spek beli 2%: 180 miliar ke minter, 8,82 triliun ke bob.
+        assertEq(token.balanceOf(address(mint)), 180_000_000_000 ether, "setup: pajak beli 2%");
+        assertEq(token.balanceOf(bob), 8_820_000_000_000 ether, "setup: bob terima 98%");
 
         // ---- Flush pajak beli -> dividend pool (model bayangan) ----
-        uint256 rT = 12_579_200_000 ether; // 22_579_200_000 - 10_000_000_000
-        uint256 rW = 10.239904 ether; // 0,239904 (pool open) + 10 (bayaran bob)
+        uint256 rT = 13_579_200_000_000 ether; // 22_579_200_000_000 - 9_000_000_000_000
+        uint256 rW = 335.904 ether; // 239,904 (pool open) + 96 (bayaran bob)
         uint256 mdps;
         uint256 totalDep;
-        (rT, rW, mdps, totalDep) = _flushTaxShadow(rT, rW, 200_000_000 ether, supply0, 0, 0);
+        (rT, rW, mdps, totalDep) = _flushTaxShadow(rT, rW, 180_000_000_000 ether, supply0, 0, 0);
         assertEq(token.balanceOf(address(mint)), 0, "model: pajak beli habis terjual");
 
-        // ---- Bob JUAL 5 miliar token: split spek 1% burn + 1% kept ----
+        // ---- Bob JUAL 2 triliun token: split spek 1% burn + 1% kept ----
         // CATATAN MODEL: "burn" di AgentToken adalah transfer ke DEAD,
         // BUKAN _burn — tokennya TETAP ada di totalSupply dan ikut
         // pro-rata dividen (tidak pernah diklaim DEAD). Jadi supply
         // TIDAK turun; penyebut akumulator tetap supply0 di flush kedua.
         vm.prank(bob);
-        token.transfer(pairAddr, 5_000_000_000 ether);
+        token.transfer(pairAddr, 2_000_000_000_000 ether);
         (uint256 w0, uint256 w1) =
-            pair.token0() == address(wbnb) ? (uint256(1 ether), uint256(0)) : (uint256(0), uint256(1 ether));
-        pair.swap(w0, w1, bob, ""); // bob ambil 1 BNB (parameter setup)
-        assertEq(token.balanceOf(token.DEAD()), 50_000_000 ether, "setup: burn 1% parkir di DEAD");
+            pair.token0() == address(wbnb) ? (uint256(20 ether), uint256(0)) : (uint256(0), uint256(20 ether));
+        pair.swap(w0, w1, bob, ""); // bob ambil 20 BNB (parameter setup)
+        assertEq(token.balanceOf(token.DEAD()), 20_000_000_000 ether, "setup: burn 1% parkir di DEAD");
         assertEq(token.totalSupply(), supply0, "setup: supply tetap (burn = transfer ke DEAD)");
-        assertEq(token.balanceOf(address(mint)), 50_000_000 ether, "setup: kept 1% di minter");
-        rT += 4_900_000_000 ether; // net token masuk pair (5 M - 1% - 1%)
-        rW -= 1 ether;
+        assertEq(token.balanceOf(address(mint)), 20_000_000_000 ether, "setup: kept 1% di minter");
+        rT += 1_960_000_000_000 ether; // net token masuk pair (2 T - 1% - 1%)
+        rW -= 20 ether;
 
         // ---- Flush pajak jual -> dividend pool (penyebut tetap supply0) ----
-        (rT, rW, mdps, totalDep) = _flushTaxShadow(rT, rW, 50_000_000 ether, supply0, mdps, totalDep);
+        (rT, rW, mdps, totalDep) = _flushTaxShadow(rT, rW, 20_000_000_000 ether, supply0, mdps, totalDep);
         assertEq(token.balanceOf(address(mint)), 0, "model: pajak jual habis terjual");
         // Validasi model: total setoran versi kontrak == versi bayangan.
         assertEq(token.totalDividends(), totalDep, "model: total setoran dividen cocok");
@@ -193,7 +198,7 @@ contract Wave3PinTest is BaishouTest {
         // Pair memegang ~35% supply pada titik ini dan ikut pro-rata —
         // sudah tercermin karena mdps membagi atas totalSupply PENUH.
         uint256 expected = aliceTokens * mdps / SPEC_MAGNITUDE;
-        assertEq(expected, 102_951_825_930_676_097, "PIN W4: ekspektasi literal 0,102951825930676097 BNB");
+        assertEq(expected, 2_653_293_237_882_583, "PIN W4 (v2, pool nyata): ekspektasi literal 0,002653293237882583 BNB");
         assertGe(expected, 0.001 ether, "ekspektasi di atas ambang klaim minimum");
         uint256 before = alice.balance;
         vm.prank(alice);

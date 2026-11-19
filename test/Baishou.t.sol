@@ -5,6 +5,8 @@
 // - setUp memakai priceDiv = 1 (bukan 1000): costOf(1) == 0,00168 ether
 //   persis seperti dokumen desain; user test di-deal 100 ether (lebih dari
 //   cukup untuk 168 share x 0,00168 = 0,28224 BNB).
+// - v2: setUp memulai sale via startSale() (bukan setPaused(false)) —
+//   saleStartTime == timestamp setUp, failureTime() = start + 14 hari.
 // - Pool open dicapai via _fastForwardToOpen() + 1 mint pemicu (vm.store):
 //   loop 1.000 agen x 168 share terlalu lambat/rapuh. Slot storage diambil
 //   dari `forge inspect AgentMint storage-layout` (totalMinted=0,
@@ -78,7 +80,7 @@ contract BaishouTest is Test {
         vm.deal(stranger, 100 ether);
 
         vm.prank(admin);
-        mint.setPaused(false);
+        mint.startSale();
     }
 
     // ---- Helpers -----------------------------------------------------------
@@ -119,6 +121,34 @@ contract BaishouTest is Test {
         assertTrue(mint.opened(), "pool should be open after trigger mint");
     }
 
+    /// @dev Isi sale sampai OPEN_AT lewat jalur mint NYATA (tanpa vm.store,
+    ///      tanpa openEarly — fungsi itu DIHAPUS di v2): agen generik mint
+    ///      MAX_PER_TX per alamat sampai totalMinted == OPEN_AT; mint
+    ///      terakhir memicu _open() di dalam kontrak. Prasyarat:
+    ///      (OPEN_AT - totalMinted) habis dibagi MAX_PER_TX. Semua mint
+    ///      memakai `referrer` yang sama (address(0) = tanpa referrer ->
+    ///      potongan 5% jatuh ke pool; seed pool 239,904 BNB, treasury
+    ///      tetap 42,336 BNB). Gas metering dimatikan selama loop massal
+    ///      (pola yang sama seperti ForkOpen — eksekusi tetap penuh).
+    function _fillToOpen(address referrer) internal {
+        uint256 per = mint.MAX_PER_TX();
+        uint256 cost = mint.costOf(per); // flat pre-pool: konstan
+        uint256 i;
+        vm.pauseGasMetering();
+        while (mint.totalMinted() + per <= mint.OPEN_AT()) {
+            address agent = address(uint160(0x100_000 + i));
+            string memory handle = string.concat("filler", vm.toString(i));
+            registry.setHandle(agent, handle);
+            registry.setOwner(uint256(keccak256(bytes(handle))), agent);
+            vm.deal(agent, 1 ether);
+            vm.prank(agent);
+            mint.mint{value: cost}(per, referrer, cost);
+            i++;
+        }
+        vm.resumeGasMetering();
+        assertTrue(mint.opened(), "pool harus buka sesudah fill ke OPEN_AT");
+    }
+
     // ---- Wiring ------------------------------------------------------------
 
     function test_DeploymentWiring() public view {
@@ -126,7 +156,7 @@ contract BaishouTest is Test {
         assertTrue(address(mint) != address(0), "mint not deployed");
         assertTrue(token.pair() != address(0), "pair not created");
         assertEq(token.wbnb(), address(wbnb), "token wbnb mismatch");
-        assertFalse(mint.paused(), "mint should be unpaused after setPaused(false)");
+        assertFalse(mint.paused(), "mint should be unpaused after startSale()");
         assertFalse(token.tradingEnabled(), "trading must be closed before pool opens");
         assertFalse(mint.opened(), "pool must not be open at deploy");
         assertEq(mint.totalMinted(), 0, "nothing minted at deploy");
@@ -200,6 +230,9 @@ contract BaishouTest is Test {
         assertEq(mint.INVITE_QUOTA(), 0, "kuota invite +2 DIHAPUS");
         assertEq(mint.FREE_SHARES(), 16_800, "free 16.800 share");
         assertEq(mint.EPOCH_SHARES(), 16_800, "epoch 16.800 share");
+        assertEq(mint.SALE_WINDOW(), 14 days, "jendela target sale 14 hari sejak start (v2)");
+        assertEq(mint.POST_POOL_WINDOW(), 7 days, "mint pasca-pool tutup +7 hari (v2)");
+        assertEq(mint.REFUND_WINDOW(), 90 days, "jendela refund 90 hari sejak gagal");
     }
 
     function test_BaishouTokenTaxTargets() public view {
@@ -224,14 +257,15 @@ contract BaishouTest is Test {
 
     function test_DeployTimeAndSaleFailed() public view {
         assertEq(mint.deployTime(), block.timestamp, "deployTime = waktu deploy");
-        assertEq(mint.failureTime(), block.timestamp + 7 days, "failure = deploy + 7 hari");
+        assertEq(mint.saleStartTime(), block.timestamp, "setUp startSale() di timestamp yang sama");
+        assertEq(mint.failureTime(), block.timestamp + 14 days, "failure = start + 14 hari (v2)");
         assertFalse(mint.saleFailed(), "belum gagal saat deploy");
         assertFalse(mint.mintClosed(), "mint belum tutup saat deploy");
     }
 
     function test_SaleFailedAfterDeadline() public {
-        vm.warp(vm.getBlockTimestamp() + 7 days + 1);
-        assertTrue(mint.saleFailed(), "gagal kalau deadline lewat & pool belum buka");
+        vm.warp(vm.getBlockTimestamp() + 14 days + 1);
+        assertTrue(mint.saleFailed(), "gagal kalau deadline start+14 hari lewat & pool belum buka");
         uint256 cost = mint.costOf(1);
         vm.prank(alice);
         vm.expectRevert(AgentMint.SoldOut.selector);

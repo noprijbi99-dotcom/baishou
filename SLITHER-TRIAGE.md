@@ -116,6 +116,31 @@ perlu dicatat). **By-design.**
   memang bercabang pre/post-pool + escrow; dipecah lebih jauh akan
   mengaburkan invarian escrow — diterima, dicover 139 test.
 
+## V2 DELTA — patch sale-clock (19 Nov 2026, malam)
+
+Re-run: `~/.venvs/slither/bin/slither . --exclude-dependencies`
+(Slither 0.11.6, solc 0.8.28). Hasil: `slither-v2-2026-11-19.json`
+(**76 temuan**: 4 High, 8 Medium, 31 Low, 33 Informational) vs v1 74
+(4/7/30/33). Diff per-(check, fungsi) terhadap JSON v1:
+
+**BARU (3):**
+- `Medium incorrect-equality` — `failureTime()`: `saleStartTime == 0`.
+  Ini uji SENTINEL "sale belum dimulai" (0 = belum start), bukan
+  perbandingan saldo/timestamp yang bisa dimanipulasi. Kesetaraan eksak
+  memang satu-satunya uji yang benar untuk sentinel. **By-design.**
+- `Low timestamp` — `failureTime()` dan `startSale()`: jendela sale
+  14 hari memang didefinisikan atas `block.timestamp` (inti patch v2);
+  deviasi validator beberapa detik tidak material di skala hari —
+  justifikasi yang sama dengan `timestamp` ×8 di v1. **By-design.**
+
+**HILANG (1):**
+- `Low timestamp` — `openEarly`: hilang bersama fungsinya (dihapus, RT-02).
+
+**Tidak berubah:** 4 High yang sama (justifikasi §1–2 tetap berlaku —
+tidak ada jalur bayar/reentrancy baru; `startSale` hanya menulis
+`saleStartTime` + `paused` dan tidak menyentuh ETH), Medium/Low/Info
+lainnya identik per (check, fungsi). **Delta bersih: 0 temuan nyata.**
+
 ## Yang belum dilakukan (untuk review independen)
 
 - Slither tidak menggantikan audit: tetap dibutuhkan review independen

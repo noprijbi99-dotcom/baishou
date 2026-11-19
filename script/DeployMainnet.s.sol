@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: MIT
 // BAISHOU - deploy script (MAINNET ONLY, chain 56).
-// MINT TETAP TUTUP: kontrak lahir dengan paused = true. Script ini TIDAK
-// memanggil setPaused(false), openEarly, mint, atau seed apa pun.
+// MINT TETAP TUTUP: kontrak lahir dengan paused = true dan sale BELUM
+// dimulai (v2: saleStartTime = 0 — jam target 14 hari belum jalan, tidak
+// ada bom waktu dari deploy). Script ini TIDAK memanggil startSale,
+// setPaused(false), mint, atau seed apa pun.
 // Urutan deploy:
 //   1. AgentToken("BAISHOU", "BAISHOU", WBNB, FACTORY, POOL_MANAGER, INFINITY_VAULT)
 //   2. AgentMint(Config{ token, registrar, treasury, feeTreasury, admin,
@@ -93,6 +95,6 @@ contract DeployBaishouMainnet is Script {
         console.log("factory:", FACTORY);
         console.log("poolManager:", POOL_MANAGER);
         console.log("infinityVault:", INFINITY_VAULT);
-        console.log("MINT STAYS CLOSED: paused=true (initial state). No setPaused(false) called.");
+        console.log("MINT STAYS CLOSED: paused=true, saleStartTime=0. No startSale called.");
     }
 }

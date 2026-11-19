@@ -162,8 +162,9 @@ contract AdversarialTest is BaishouTest {
     function test_Reentrancy_ClaimTreasuryPaysExactlyOnce() public {
         // Stack terpisah: treasury = kontrak penyerang. Akrual claimTreasury
         // hanya ada PASCA-pool (bagian pre-pool dibayar sekali di _open),
-        // jadi: mint pre-pool -> openEarly (penyerang terima 15% pre-pool,
-        // receive belum armed) -> mint pasca-pool -> claimTreasury armed.
+        // jadi: mint pre-pool -> pool buka di OPEN_AT via fill nyata (v2:
+        // openEarly dihapus; penyerang terima 15% pre-pool, receive belum
+        // armed) -> mint pasca-pool -> claimTreasury armed.
         MockWBNB wbnb2 = new MockWBNB();
         MockFactory factory2 = new MockFactory();
         MockRegistry registry2 = new MockRegistry();
@@ -188,25 +189,46 @@ contract AdversarialTest is BaishouTest {
         registry2.setHandle(alice, "alice");
         registry2.setOwner(ALICE_ID, alice);
         vm.prank(admin);
-        mint2.setPaused(false);
+        mint2.startSale();
 
-        uint256 cost10 = mint2.costOf(10);
+        // v2: pool HANYA buka di OPEN_AT — alice mint 167 (kuota per-ID
+        // 168: 1 share disisakan untuk mint pasca-pool di bawah), 999 agen
+        // generik x 168, lalu 1 agen terakhir mint 1 share penutup.
+        uint256 cost168 = mint2.costOf(168);
+        uint256 cost167 = mint2.costOf(167);
         vm.prank(alice);
-        mint2.mint{value: cost10}(10, address(0), cost10);
-        vm.prank(admin);
-        mint2.openEarly();
-        assertEq(address(atk).balance, 0.00252 ether, "treasury terima 15% pre-pool saat _open");
+        mint2.mint{value: cost167}(167, address(0), cost167);
+        vm.pauseGasMetering();
+        for (uint256 i; i < 999; i++) {
+            address agent = address(uint160(0x200_000 + i));
+            string memory handle = string.concat("f2agent", vm.toString(i));
+            registry2.setHandle(agent, handle);
+            registry2.setOwner(uint256(keccak256(bytes(handle))), agent);
+            vm.deal(agent, 1 ether);
+            vm.prank(agent);
+            mint2.mint{value: cost168}(168, address(0), cost168);
+        }
+        address last = address(uint160(0x200_000 + 999));
+        registry2.setHandle(last, "f2agent999");
+        registry2.setOwner(uint256(keccak256(bytes("f2agent999"))), last);
+        vm.deal(last, 1 ether);
+        uint256 costLast = mint2.costOf(1);
+        vm.prank(last);
+        mint2.mint{value: costLast}(1, address(0), costLast);
+        vm.resumeGasMetering();
+        assertTrue(mint2.opened(), "pool mint2 buka di OPEN_AT");
+        assertEq(address(atk).balance, 42.336 ether, "treasury terima 15% x 282,24 saat _open");
 
-        uint256 cost1 = mint2.costOf(1);
+        uint256 cost1 = mint2.costOf(1); // share 168.001: epoch 1 = 0,0017136
         vm.prank(alice);
         mint2.mint{value: cost1}(1, address(0), cost1);
-        assertEq(mint2.escrowTreasury(), 0.000252 ether, "akrual pasca-pool 15% x 0,00168");
+        assertEq(mint2.escrowTreasury(), 0.00025704 ether, "akrual pasca-pool 15% x 0,0017136");
 
         atk.arm(4); // reenter claimTreasury saat payout
         atk.doClaimTreasury();
         assertEq(atk.reentryAttempts(), 1, "percobaan reentrancy terjadi");
         assertEq(atk.reentrySuccesses(), 0, "reentrancy claimTreasury GAGAL");
-        assertEq(address(atk).balance, 0.00252 ether + 0.000252 ether, "klaim dibayar PERSIS sekali");
+        assertEq(address(atk).balance, 42.336 ether + 0.00025704 ether, "klaim dibayar PERSIS sekali");
         assertEq(mint2.escrowTreasury(), 0, "escrow treasury kosong");
         vm.expectRevert(AgentMint.NothingOwed.selector);
         atk.doClaimTreasury();

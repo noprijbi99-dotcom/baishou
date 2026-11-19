@@ -15,11 +15,8 @@ contract PoolOpenTest is BaishouTest {
         assertFalse(mint.opened(), "pool belum buka saat deploy");
     }
 
-    function test_OpenEarlyRevertsWithNoMints() public {
-        vm.prank(admin);
-        vm.expectRevert(AgentMint.CannotOpenEarly.selector);
-        mint.openEarly();
-    }
+    // v2: openEarly DIHAPUS (RT-02) — tidak ada lagi jalur buka pool dini;
+    // pool HANYA buka saat mint mencapai OPEN_AT (diuji di bawah + ForkOpen).
 
     function test_PoolOpensAt168000Shares() public {
         _openPool(carol);

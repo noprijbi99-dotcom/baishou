@@ -52,7 +52,7 @@ contract RefundExitTest is BaishouTest {
         vm.prank(alice);
         mint.exit(10);
         uint256 forfeit = 0.0168 ether * 20 / 100;
-        vm.warp(vm.getBlockTimestamp() + 7 days + 1);
+        vm.warp(vm.getBlockTimestamp() + 14 days + 1);
         assertTrue(mint.saleFailed(), "launch gagal");
         uint256 before = alice.balance;
         vm.prank(alice);

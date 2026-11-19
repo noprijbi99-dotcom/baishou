@@ -69,7 +69,11 @@ contract AgentMint is ReentrancyGuard {
     uint256 public constant INVITE_QUOTA = 0;
     uint256 public constant FREE_SHARES = 16_800;
     uint256 public constant EPOCH_SHARES = 16_800;
-    uint256 public constant SALE_DURATION = 7 days;
+    /// @notice Jendela target sale: 14 hari sejak startSale() (v2, keputusan
+    ///         user 19 Nov 2026 — "target dua minggu, setelah itu refund").
+    uint256 public constant SALE_WINDOW = 14 days;
+    /// @notice Mint pasca-pool tutup 7 hari sesudah pool buka (tetap).
+    uint256 public constant POST_POOL_WINDOW = 7 days;
     uint256 public constant REFUND_WINDOW = 90 days;
     address public constant DEAD = 0x000000000000000000000000000000000000dEaD;
 
@@ -87,13 +91,14 @@ contract AgentMint is ReentrancyGuard {
     uint256 public immutable swapFeeBps;
     uint256 public immutable BASE_PRICE;
     uint256 public immutable OPEN_BNB;
+    /// @notice Waktu deploy — INFORMATIONAL saja (v2/RT-01: tidak ada jam
+    ///         yang berjangkar deploy; jam sale mulai di startSale()).
     uint256 public immutable deployTime;
-    uint256 public immutable failureTime;
     bool private immutable _bnbIs0;
 
     uint256 public totalMinted;
     uint256 public totalPaid;
-    bool public paused = true; // deploy dalam keadaan pause; admin buka saat launch
+    bool public paused = true; // deploy dalam keadaan pause; admin buka via startSale()
     bool public renounced;
     bool public reviewPassed;
     uint256 public pendingBnb;
@@ -124,14 +129,21 @@ contract AgentMint is ReentrancyGuard {
 
     mapping(address => bool) public unblockable;
 
+    // —— v2: jam sale berjangkar MULAI SALE (RT-01) ——
+    /// @notice Waktu startSale() dipanggil admin; 0 = sale belum dimulai
+    ///         (jam kegagalan BELUM jalan — saleFailed() selalu false dan
+    ///         failureTime() = 0). Ditaruh di slot storage terakhir supaya
+    ///         layout v1 tidak bergeser.
+    uint256 public saleStartTime;
+
     event PausedSet(bool paused);
+    event SaleStarted(uint256 startTime);
     event Renounced();
     event ReviewPassedSet(bool passed);
     event Minted(address indexed minter, uint256 indexed agentTokenId, uint256 firstSerial, uint256 shares, uint256 paid);
     event FreeMinted(address indexed minter, uint256 indexed agentTokenId, uint256 totalFree);
     event ParticipantRegistered(uint256 indexed agentTokenId, address indexed wallet);
     event Opened(uint256 bnbIn, uint256 tokensIn, uint256 lp);
-    event EarlyOpened(uint256 shares);
     event TaxSwapped(uint256 tokensIn, uint256 bnbOut);
     event TaxSwapFailed(bytes reason);
     event Exited(address indexed user, uint256 indexed agentTokenId, uint256 shares, uint256 refunded, uint256 forfeited);
@@ -161,7 +173,7 @@ contract AgentMint is ReentrancyGuard {
     error SwappedThisBlock();
     error OnlySelf();
     error ZeroAddress();
-    error CannotOpenEarly();
+    error AlreadyStarted();
     error ReviewNotPassed();
     error NotFailed();
     error RefundExpired();
@@ -202,7 +214,6 @@ contract AgentMint is ReentrancyGuard {
         BASE_PRICE = PROD_BASE_PRICE / c.priceDiv;
         OPEN_BNB = PROD_OPEN_BNB / c.priceDiv;
         deployTime = block.timestamp;
-        failureTime = block.timestamp + SALE_DURATION;
         _bnbIs0 = pair.token0() == c.wbnb;
         for (uint256 i; i < c.unblockable.length; i++) {
             unblockable[c.unblockable[i]] = true;
@@ -243,14 +254,22 @@ contract AgentMint is ReentrancyGuard {
         return openedTime != 0;
     }
 
-    /// @notice Launch gagal: deadline 7 hari dari deploy lewat & pool belum buka.
+    /// @notice Deadline target sale = saleStartTime + SALE_WINDOW (14 hari).
+    ///         Mengembalikan 0 sebelum sale dimulai (jam belum jalan).
+    function failureTime() public view returns (uint256) {
+        return saleStartTime == 0 ? 0 : saleStartTime + SALE_WINDOW;
+    }
+
+    /// @notice Launch gagal: sale SUDAH dimulai, deadline 14 hari lewat &
+    ///         pool belum buka. Sebelum startSale(): selalu false, di
+    ///         timestamp berapa pun (tidak ada bom waktu dari deploy).
     function saleFailed() public view returns (bool) {
-        return !opened() && block.timestamp > failureTime;
+        return saleStartTime != 0 && !opened() && block.timestamp > failureTime();
     }
 
     /// @notice Mint tutup 7 hari sesudah pool buka ATAU saat 1.680.000 share.
     function mintClosed() public view returns (bool) {
-        return opened() && (block.timestamp > openedTime + SALE_DURATION || totalMinted >= TOTAL_SHARES);
+        return opened() && (block.timestamp > openedTime + POST_POOL_WINDOW || totalMinted >= TOTAL_SHARES);
     }
 
     function reserves() public view returns (uint256 rBnb, uint256 rToken) {
@@ -310,13 +329,21 @@ contract AgentMint is ReentrancyGuard {
         emit ReviewPassedSet(next);
     }
 
-    function openEarly() external nonReentrant {
+    /// @notice Mulai sale — SATU KALI, admin (v2/RT-01+RT-02): menetapkan
+    ///         saleStartTime = sekarang (jam target 14 hari mulai jalan)
+    ///         dan membuka pause secara atomik dalam satu tx. Sebelum
+    ///         fungsi ini dipanggil, kontrak boleh menunggu selamanya:
+    ///         tidak ada deadline yang berjalan dari deploy. Pool hanya
+    ///         bisa buka lewat jalur mint mencapai OPEN_AT (openEarly
+    ///         DIHAPUS di v2 — tidak ada lagi jalur buka pool dini yang
+    ///         membatalkan janji escrow/refund).
+    function startSale() external {
         _onlyAdmin();
-        if (opened() || totalMinted == 0 || totalMinted >= OPEN_AT) revert CannotOpenEarly();
-        if (pendingBnb == 0 || pendingTokens == 0) revert BadPayment();
-        // Forfeit yang terkumpul ikut jadi likuiditas bonus (di atas OPEN_BNB).
-        _open(pendingBnb + forfeitPool, pendingTokens);
-        emit EarlyOpened(totalMinted);
+        if (saleStartTime != 0) revert AlreadyStarted();
+        saleStartTime = block.timestamp;
+        paused = false;
+        emit SaleStarted(saleStartTime);
+        emit PausedSet(false);
     }
 
     function setPoolBlocked(address pool, bool blocked) external {
@@ -585,7 +612,7 @@ contract AgentMint is ReentrancyGuard {
     ///         TIDAK PERNAH dibayar kalau pool sudah buka.
     function claimRefund() external nonReentrant {
         if (!saleFailed()) revert NotFailed();
-        if (block.timestamp > failureTime + REFUND_WINDOW) revert RefundExpired();
+        if (block.timestamp > failureTime() + REFUND_WINDOW) revert RefundExpired();
         uint256 amount = deposits[msg.sender] + forfeitOf[msg.sender];
         if (amount == 0) revert NothingOwed();
         deposits[msg.sender] = 0;
@@ -597,7 +624,7 @@ contract AgentMint is ReentrancyGuard {
     /// @notice Sesudah jendela refund 90 hari lewat, siapa pun boleh sapu
     ///         sisa escrow ke DEAD (dibakar, bukan ke tim). Setelah ini escrow 0.
     function sweepUnclaimed() external nonReentrant {
-        if (!saleFailed() || block.timestamp <= failureTime + REFUND_WINDOW) revert NotSweepable();
+        if (!saleFailed() || block.timestamp <= failureTime() + REFUND_WINDOW) revert NotSweepable();
         pendingBnb = 0;
         escrowTreasury = 0;
         forfeitPool = 0;

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
-// BAISHOU - jalur REFUND GAGAL (target 168.000 share tidak tercapai 7 hari).
+// BAISHOU - jalur REFUND GAGAL (target 168.000 share tidak tercapai
+// dalam jendela sale 14 hari sejak startSale — v2).
 // Desain FINAL: SEMUA paid mint refund 100% via klaim PULL (tiap orang klaim
 // sendiri; jendela klaim 90 hari; sisa yang tidak diklaim setelah 90 hari
 // dibakar ke dead address - tidak ada yang diuntungkan dari refund tak diklaim).
@@ -10,7 +11,7 @@ import {AgentMint} from "../src/AgentMint.sol";
 
 contract RefundFailTest is BaishouTest {
     function _fail() internal {
-        vm.warp(vm.getBlockTimestamp() + 7 days + 1);
+        vm.warp(vm.getBlockTimestamp() + 14 days + 1);
         assertTrue(mint.saleFailed(), "launch gagal");
     }
 
