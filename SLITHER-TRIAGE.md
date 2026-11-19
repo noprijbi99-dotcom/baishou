@@ -1,149 +1,146 @@
 # Slither Triage — BAISHOU step 2 (19 Nov 2026)
 
-Perintah: `~/.venvs/slither/bin/slither . --exclude-dependencies`
+Command: `~/.venvs/slither/bin/slither . --exclude-dependencies`
 (Slither 0.11.6, solc 0.8.28, Foundry 1.9.0).
-Hasil lengkap: `slither-2026-11-19.json` (74 temuan).
-Baseline fork awal: `slither-baseline-2026-11-19.json` (78 temuan:
+Full results: `slither-2026-11-19.json` (74 findings).
+Initial fork baseline: `slither-baseline-2026-11-19.json` (78 findings:
 2 High, 17 Medium, 25 Low, 34 Informational).
 
-## Ringkasan
+## Summary
 
-| Severity | Baseline | Sekarang | Status |
+| Severity | Baseline | Now | Status |
 |---|---|---|---|
-| High | 2 | 4 | 0 nyata — semua dijustifikasi di bawah (pola yang sama seperti baseline, kini di 2 tempat karena ada jalur bayar baru `_payOrOwe`) |
-| Medium | 17 | 7 | 0 nyata — 2 diperbaiki di kode (lihat § "Diperbaiki"), 5 false positive / by-design |
-| Low | 25 | 30 | 0 nyata — semua by-design / vendor / false positive |
-| Informational | 34 | 33 | 0 nyata — mayoritas dari `src/vendor/` (OpenZeppelin) |
+| High | 2 | 4 | 0 real — all justified below (same pattern as baseline, now in 2 places because there is a new payment path `_payOrOwe`) |
+| Medium | 17 | 7 | 0 real — 2 fixed in code (see § "Fixed"), 5 false positive / by-design |
+| Low | 25 | 30 | 0 real — all by-design / vendor / false positive |
+| Informational | 34 | 33 | 0 real — mostly from `src/vendor/` (OpenZeppelin) |
 
-**Baseline 2 High TIDAK hilang — keduanya masih ada dalam bentuk yang sama
-dan dijustifikasi tertulis di bawah, sesuai instruksi tugas ("hilang atau
-terjustifikasi tertulis").** Keduanya adalah pola inheren desain PULL-payment
-+ `nonReentrant`, bukan bug: `_pay arbitrary-send-eth` dan
-`_mintWithBnb reentrancy-eth`. Dua High "baru" adalah kemunculan pola yang
-sama di kode baru (`_payOrOwe`, `_mintShares`).
+**The 2 baseline Highs did NOT disappear — both still exist in the same form
+and are justified in writing below, per the task instruction ("gone or
+justified in writing").** Both are patterns inherent to the PULL-payment design
++ `nonReentrant`, not bugs: `_pay arbitrary-send-eth` and
+`_mintWithBnb reentrancy-eth`. The two "new" Highs are appearances of the
+same patterns in new code (`_payOrOwe`, `_mintShares`).
 
-## Diperbaiki di kode (sebelum triase ini)
+## Fixed in code (before this triage)
 
-- `divide-before-multiply` di `costOf` / `_mintShares` (lama): dihitung ulang
-  jadi `priceUnits(n) * (BASE_PRICE / 100)` — eksak karena constructor
-  memaksa `BASE_PRICE % 100 == 0` (dan `(PROD_BASE_PRICE / priceDiv) % 100 == 0`).
-- `uninitialized-local` (`userT`, `Pool p` di `_mintShares`): inisialisasi
-  eksplisit (`= 0`, `Pool(0,0,0,0,0,0,0)`).
-- `redundant-statements` (`id;`, `n;`): parameter dihapus/di-nameless-kan.
-- `events-access` (`AgentToken.initialize`): tambah event `MinterInitialized`
+- `divide-before-multiply` in `costOf` / `_mintShares` (old): recomputed
+  as `priceUnits(n) * (BASE_PRICE / 100)` — exact because the constructor
+  forces `BASE_PRICE % 100 == 0` (and `(PROD_BASE_PRICE / priceDiv) % 100 == 0`).
+- `uninitialized-local` (`userT`, `Pool p` in `_mintShares`): explicit
+  initialization (`= 0`, `Pool(0,0,0,0,0,0,0)`).
+- `redundant-statements` (`id;`, `n;`): parameters removed/made nameless.
+- `events-access` (`AgentToken.initialize`): added the `MinterInitialized` event
   + emit.
-- Hardening: `_open()` kini menyetel `openedTime` di baris pertama (CEI)
-  sebelum panggilan eksternal apa pun.
+- Hardening: `_open()` now sets `openedTime` on the first line (CEI)
+  before any external call.
 
-## HIGH — dijustifikasi (bukan bug)
+## HIGH — justified (not bugs)
 
-### 1. `arbitrary-send-eth` — `AgentMint._pay` dan `AgentMint._payOrOwe`
-Slither menganggap `to` sebagai alamat arbitrer. Faktanya `to` HANYA bisa
-berupa: (a) `msg.sender` — pemanggil sendiri (refund overpay, `exit`,
-`claimRefund`, `claimReferral`, `claimOwed`); atau (b) `treasury` —
-`immutable` yang ditetapkan saat deploy. Tidak ada satu pun jalur di mana
-pemanggil bisa memilih alamat penerima orang lain. Jumlah juga terbatas oleh
-akuntansi (`deposits`, `forfeitOf`, `referralAccrued`, `escrowTreasury` —
-semuanya dikurangi SEBELUM `call`, checks-effects-interactions), dan semua
-fungsi pemanggil memakai `nonReentrant`. Mengganti ke pola lain (mis. bayar
-WBNB, bukan BNB) akan mengubah janji produk (refund BNB) tanpa mengurangi
-risiko nyata. **Diterima.**
+### 1. `arbitrary-send-eth` — `AgentMint._pay` and `AgentMint._payOrOwe`
+Slither treats `to` as an arbitrary address. In fact `to` can ONLY
+be: (a) `msg.sender` — the caller itself (overpay refund, `exit`,
+`claimRefund`, `claimReferral`, `claimOwed`); or (b) `treasury` —
+an `immutable` set at deploy. There is no path whatsoever where
+a caller can choose another person's recipient address. Amounts are also bounded by
+accounting (`deposits`, `forfeitOf`, `referralAccrued`, `escrowTreasury` —
+all reduced BEFORE the `call`, checks-effects-interactions), and every
+calling function uses `nonReentrant`. Switching to another pattern (e.g. paying
+WBNB instead of BNB) would change the product promise (BNB refunds) without reducing
+real risk. **Accepted.**
 
-### 2. `reentrancy-eth` — `AgentMint._mintWithBnb` dan `AgentMint._mintShares`
-Semua entry point publik yang menyentuh ETH memakai `nonReentrant`
-(`ReentrancyGuard` OZ); `_mintShares` adalah `private` dan hanya dipanggil
-dari `_mintWithBnb` yang sudah ter-guard. Panggilan eksternal di dalam alur
-hanya ke kontrak `immutable` tepercaya (WBNB, token sendiri, pair) atau ke
-`call` refund di akhir setelah semua state diperbarui. Tidak ada jalur
-re-entry yang bisa mengubah akuntansi: `mintedCount`/`totalMinted`/
-`deposits`/`pendingBnb` di-update sebelum `_pay` terakhir, dan guard
-memblokir pemanggilan ulang `mint`/`exit`/`claim*` di tengah eksekusi.
-**Diterima (mitigasi: guard + CEI + alamat immutable).**
+### 2. `reentrancy-eth` — `AgentMint._mintWithBnb` and `AgentMint._mintShares`
+Every public entry point touching ETH uses `nonReentrant`
+(OZ `ReentrancyGuard`); `_mintShares` is `private` and only called
+from the already-guarded `_mintWithBnb`. External calls inside the flow
+go only to trusted `immutable` contracts (WBNB, own token, pair) or to
+the refund `call` at the end after all state is updated. There is no
+re-entry path that can alter accounting: `mintedCount`/`totalMinted`/
+`deposits`/`pendingBnb` are updated before the final `_pay`, and the guard
+blocks re-calling `mint`/`exit`/`claim*` mid-execution.
+**Accepted (mitigation: guard + CEI + immutable addresses).**
 
-## MEDIUM — dijustifikasi (bukan bug)
+## MEDIUM — justified (not bugs)
 
 ### 3. `divide-before-multiply` ×2 (`costOf`, `_mintShares`)
-Pola yang tersisa adalah `unit = BASE_PRICE / 100` lalu `priceUnits * unit`.
-Pembagian ini EKSAK: constructor `revert BadConfig()` kecuali
-`PROD_BASE_PRICE % priceDiv == 0` dan `(PROD_BASE_PRICE / priceDiv) % 100 == 0`
-(0,00168 ether / 1 = 1,68e15, habis dibagi 100). Tidak ada kehilangan
-presisi; diverifikasi test `test_FlatPricePrePool` (`costOf(1)` persis
-0,00168 ether, `costOf(168)` persis 168×). **False positive.**
+The remaining pattern is `unit = BASE_PRICE / 100` then `priceUnits * unit`.
+This division is EXACT: the constructor `revert BadConfig()` unless
+`PROD_BASE_PRICE % priceDiv == 0` and `(PROD_BASE_PRICE / priceDiv) % 100 == 0`
+(0,00168 ether / 1 = 1,68e15, exactly divisible by 100). No precision
+loss; verified by test `test_FlatPricePrePool` (`costOf(1)` exactly
+0,00168 ether, `costOf(168)` exactly 168×). **False positive.**
 
 ### 4. `incorrect-equality` ×2 (`swapTax`: `lastTaxSwapBlock == block.number`; `_swapTax`: `amount == 0`)
-Keduanya kesetaraan yang disengaja, bukan perbandingan saldo yang bisa
-dimanipulasi: (a) guard sekali-per-blok untuk swap pajak; (b) revert kalau
-tidak ada token pajak untuk di-swap. **By-design.**
+Both are intentional equalities, not manipulable balance comparisons: (a) a once-per-block guard for tax swaps; (b) revert if
+there are no tax tokens to swap. **By-design.**
 
-### 5. `unused-return` ×3 (`reserves`, `_swapOn`: nilai ketiga `getReserves`;
-`_settle`: return `pair.mint`)
-Timestamp reserve memang tidak dipakai (bukan data yang dibutuhkan);
-jumlah LP yang tercetak ke DEAD memang tidak dipakai (LP dibakar, tidak
-perlu dicatat). **By-design.**
+### 5. `unused-return` ×3 (`reserves`, `_swapOn`: the third `getReserves` value;
+`_settle`: the return of `pair.mint`)
+The reserve timestamp is indeed unused (not needed data);
+the amount of LP minted to DEAD is indeed unused (LP is burned, does not
+need recording). **By-design.**
 
-## LOW — diringkas (semua by-design / false positive / vendor)
+## LOW — summarized (all by-design / false positive / vendor)
 
-- `calls-loop` ×14: loop `_mintShares` dibatasi `MAX_PER_TX = 168`
-  (dipaksa `_check`); panggilan eksternal di `_open`/`_payOrOwe` berada di
-  dalam loop hanya menurut analisis statis Slither (satu panggilan per
-  eksekusi, bukan iterasi user-controlled). Target kontrak `immutable`.
-- `timestamp` ×8: deadline 7 hari / jendela refund 90 hari / mint tutup
-  7 hari memang didefinisikan atas `block.timestamp` (desain §3/§10);
-  deviasi validator beberapa detik tidak memengaruhi batas berhari-hari.
-- `reentrancy-benign` ×3, `reentrancy-events` ×3: lihat justifikasi High #2;
-  event di-emit setelah call di `renounce`/`claimDividend`/`_swapTax` —
-  state sudah final sebelum call (`renounced`/`withdrawnDividends`/
-  `lastTaxSwapBlock` di-set dulu).
-- `missing-zero-check` ×2 (`poolManager_`, `infinityVault_` di constructor
-  `AgentToken`): SENGAJA tidak dicek — `address(0)` berarti "tidak ada
-  kontrak Infinity" dan tidak berbahaya: `rejects()` hanya membandingkan
-  kesetaraan, dan transfer ke `address(0)` adalah burn yang ditangani
-  sebelum pemeriksaan `rejects()`.
-- `return-bomb` ×1 (`_probe`): staticcall dibatasi `PROBE_GAS = 20_000`
-  dan hasil divalidasi panjang 32 byte + range alamat. **Mitigasi sudah ada.**
+- `calls-loop` ×14: the `_mintShares` loop is bounded by `MAX_PER_TX = 168`
+  (enforced by `_check`); the external calls in `_open`/`_payOrOwe` are inside
+  a loop only per Slither's static analysis (one call per
+  execution, not a user-controlled iteration). Target contracts are `immutable`.
+- `timestamp` ×8: the 7-day deadline / 90-day refund window / 7-day mint close
+  are indeed defined over `block.timestamp` (design §3/§10);
+  validator deviation of a few seconds does not affect day-scale boundaries.
+- `reentrancy-benign` ×3, `reentrancy-events` ×3: see High #2 justification;
+  events are emitted after the call in `renounce`/`claimDividend`/`_swapTax` —
+  state is already final before the call (`renounced`/`withdrawnDividends`/
+  `lastTaxSwapBlock` are set first).
+- `missing-zero-check` ×2 (`poolManager_`, `infinityVault_` in the `AgentToken`
+  constructor): DELIBERATELY not checked — `address(0)` means "no
+  Infinity contract" and is harmless: `rejects()` only compares
+  equality, and transfers to `address(0)` are burns handled
+  before the `rejects()` check.
+- `return-bomb` ×1 (`_probe`): the staticcall is bounded by `PROBE_GAS = 20_000`
+  and the result is validated for 32-byte length + address range. **Mitigation already in place.**
 
-## INFORMATIONAL — diringkas
+## INFORMATIONAL — summarized
 
 - `assembly` ×16, `dead-code` ×2, `solc-version` ×4, `pragma` ×1:
-  semuanya dari `src/vendor/` (OpenZeppelin, tidak disentuh) — assembly
-  OZ yang diaudit, dan pragma `^0.8.24` dipakai bersama solc 0.8.28
-  (pin di `foundry.toml`).
-- `low-level-calls` ×7: `call`/`staticcall` yang disengaja (pembayaran BNB
-  PULL, probe pair) — lihat justifikasi High #1.
-- `naming-convention` ×2: `BASE_PRICE`/`OPEN_BNB` (immutable, gaya
-  konstanta AIC yang dipertahankan).
-- `cyclomatic-complexity` ×1 (`_mintShares`, 13): satu jalur mint yang
-  memang bercabang pre/post-pool + escrow; dipecah lebih jauh akan
-  mengaburkan invarian escrow — diterima, dicover 139 test.
+  all from `src/vendor/` (OpenZeppelin, untouched) — audited OZ assembly, and pragma `^0.8.24` used alongside solc 0.8.28
+  (pinned in `foundry.toml`).
+- `low-level-calls` ×7: intentional `call`/`staticcall` (PULL BNB payments
+  , pair probe) — see High #1 justification.
+- `naming-convention` ×2: `BASE_PRICE`/`OPEN_BNB` (immutable, the AIC constant style retained).
+- `cyclomatic-complexity` ×1 (`_mintShares`, 13): a single mint path that
+  indeed branches pre/post-pool + escrow; splitting it further would
+  obscure the escrow invariant — accepted, covered by 139 tests.
 
-## V2 DELTA — patch sale-clock (19 Nov 2026, malam)
+## V2 DELTA — sale-clock patch (19 Nov 2026, evening)
 
 Re-run: `~/.venvs/slither/bin/slither . --exclude-dependencies`
-(Slither 0.11.6, solc 0.8.28). Hasil: `slither-v2-2026-11-19.json`
-(**76 temuan**: 4 High, 8 Medium, 31 Low, 33 Informational) vs v1 74
-(4/7/30/33). Diff per-(check, fungsi) terhadap JSON v1:
+(Slither 0.11.6, solc 0.8.28). Results: `slither-v2-2026-11-19.json`
+(**76 findings**: 4 High, 8 Medium, 31 Low, 33 Informational) vs v1's 74
+(4/7/30/33). Per-(check, function) diff against the v1 JSON:
 
-**BARU (3):**
+**NEW (3):**
 - `Medium incorrect-equality` — `failureTime()`: `saleStartTime == 0`.
-  Ini uji SENTINEL "sale belum dimulai" (0 = belum start), bukan
-  perbandingan saldo/timestamp yang bisa dimanipulasi. Kesetaraan eksak
-  memang satu-satunya uji yang benar untuk sentinel. **By-design.**
-- `Low timestamp` — `failureTime()` dan `startSale()`: jendela sale
-  14 hari memang didefinisikan atas `block.timestamp` (inti patch v2);
-  deviasi validator beberapa detik tidak material di skala hari —
-  justifikasi yang sama dengan `timestamp` ×8 di v1. **By-design.**
+  This is a SENTINEL test for "sale not started" (0 = not started), not
+  a manipulable balance/timestamp comparison. Exact equality
+  is indeed the only correct test for a sentinel. **By-design.**
+- `Low timestamp` — `failureTime()` and `startSale()`: the 14-day sale window
+  is indeed defined over `block.timestamp` (the core of the v2 patch);
+  validator deviation of a few seconds is immaterial at day scale —
+  the same justification as `timestamp` ×8 in v1. **By-design.**
 
-**HILANG (1):**
-- `Low timestamp` — `openEarly`: hilang bersama fungsinya (dihapus, RT-02).
+**GONE (1):**
+- `Low timestamp` — `openEarly`: gone together with the function (removed, RT-02).
 
-**Tidak berubah:** 4 High yang sama (justifikasi §1–2 tetap berlaku —
-tidak ada jalur bayar/reentrancy baru; `startSale` hanya menulis
-`saleStartTime` + `paused` dan tidak menyentuh ETH), Medium/Low/Info
-lainnya identik per (check, fungsi). **Delta bersih: 0 temuan nyata.**
+**Unchanged:** the same 4 Highs (justifications §1–2 still apply —
+no new payment/reentrancy paths; `startSale` only writes
+`saleStartTime` + `paused` and touches no ETH), other Medium/Low/Info
+identical per (check, function). **Net delta: 0 real findings.**
 
-## Yang belum dilakukan (untuk review independen)
+## Not yet done (for independent review)
 
-- Slither tidak menggantikan audit: tetap dibutuhkan review independen
-  berbayar dari treasury SETELAH pool buka (sesuai §10 #13) sebelum
-  `renounce()` — gate `reviewPassed` sudah ada di kontrak.
-- Echidna / invariant test formal belum dijalankan (di luar scope step 2).
+- Slither does not replace an audit: a paid independent review is still needed
+  from the treasury AFTER the pool opens (per §10 #13) before
+  `renounce()` — the `reviewPassed` gate already exists in the contract.
+- Echidna / formal invariant tests have not been run (outside step 2 scope).

@@ -1,230 +1,229 @@
-# BAISHOU — VERIFY-2 (verifikasi wave-2, 19 Nov 2026)
+# BAISHOU — VERIFY-2 (wave-2 verification, 19 Nov 2026)
 
-Putaran kedua atas perintah user: "jangan puas dengan sekali test, kita
-harus meminimalisir miss." Tiga pekerjaan: (1) audit kualitas asersi
-wave-1, (2) multi-seed runs, (3) test adversarial baru untuk celah yang
-belum ter-cover. **src/ dan test lama TIDAK diubah sama sekali.**
-File baru satu-satunya: `test/Adversarial.t.sol`.
+Second round on the user's order: "don't be satisfied with a single test, we
+must minimize misses." Three jobs: (1) audit the assertion quality of
+wave-1, (2) multi-seed runs, (3) new adversarial tests for the gaps
+not yet covered. **src/ and old tests were NOT changed at all.**
+The only new file: `test/Adversarial.t.sol`.
 
-## Ringkasan hasil
+## Results summary
 
-- Multi-seed: 4 seed × suite penuh (211 test) — **semua hijau**.
-- Invariant dinaikkan: **512 runs / 256.000 calls / 0 reverts — hijau**.
-- Adversarial: 7 test baru — **semua lulus**. Tidak ada perilaku kontrak
-  yang menyimpang dari spek → **tidak ada FINDING kontrak** (lihat §4).
-- Audit asersi wave-1: tidak ada asersi yang batal total, tapi ada
-  7 catatan kualitas (W1–W7, §1) — sebagian besar sudah termitigasi
-  test lain; satu yang paling substantif: W2.
+- Multi-seed: 4 seeds × full suite (211 tests) — **all green**.
+- Invariants raised: **512 runs / 256.000 calls / 0 reverts — green**.
+- Adversarial: 7 new tests — **all pass**. No contract behavior
+  deviates from spec → **no contract FINDINGS** (see §4).
+- Wave-1 assertion audit: no assertion is totally void, but there are
+  7 quality notes (W1–W7, §1) — most already mitigated by
+  other tests; the most substantive one: W2.
 
 ---
 
-## 1. Audit kualitas asersi wave-1
+## 1. Wave-1 assertion quality audit
 
-Metode: setiap ekspektasi di `ForkOpen/ForkRefund/ForkDividend/
-Invariant.t.sol` ditelusuri asal angkanya — literal independen / hitungan
-spek vs dibaca balik dari kontrak yang diuji (sirkular: test tetap hijau
-walau kontrak salah secara konsisten).
+Method: every expectation in `ForkOpen/ForkRefund/ForkDividend/
+Invariant.t.sol` was traced to the origin of its numbers — independent literals / spec
+calculations vs read back from the contract under test (circular: the test stays green
+even if the contract is consistently wrong).
 
-### ForkRefund.t.sol — BERSIH (yang terkuat)
-Semua ekspektasi payout adalah literal keras independen: referral 0,0042
-(:25), exit carol 0,02688 + forfeit 0,00672 (:31-32), exit alice 0,05376 +
-forfeit 0,01344 (:37-38), deposit sisa 0,1008/0,084 (:41-42), refund
-0,11424 / 0,084 / 0,00672 (:65-83), exit penuh 0,225792 + forfeit
-0,056448 (:92-96). Dua equality kontrak-vs-kontrak terjangkar literal di
-test yang sama: solvabilitas escrow (:44-49, total kewajiban di-pin
-0,20496 dulu) dan sisa escrow == forfeitOf (:99, forfeitPool di-pin
-0,056448 di :96). Tidak ada catatan.
+### ForkRefund.t.sol — CLEAN (the strongest)
+All payout expectations are independent hard literals: referral 0,0042
+(:25), carol's exit 0,02688 + forfeit 0,00672 (:31-32), alice's exit 0,05376 +
+forfeit 0,01344 (:37-38), remaining deposits 0,1008/0,084 (:41-42), refunds
+0,11424 / 0,084 / 0,00672 (:65-83), full exit 0,225792 + forfeit
+0,056448 (:92-96). Two contract-vs-contract equalities are literal-anchored in
+the same test: escrow solvency (:44-49, total obligations pinned at
+0,20496 first) and remaining escrow == forfeitOf (:99, forfeitPool pinned at
+0,056448 at :96). No notes.
 
 ### ForkOpen.t.sol
-- **W1 (sedang-rendah) — :29-31, :91.** Input dan asersi pertama
-  kontrak-derivatif: `sharesPerAgent = mint.MAX_PER_TX()`,
-  `cost168 = mint.costOf(...)`, lalu `cost168 == sharesPerAgent *
-  mint.BASE_PRICE()`. Ini hanya membuktikan konsistensi internal costOf
-  vs konstanta — bukan harga spek. `deposits(agen0) == cost168` (:91)
-  mewarisi kelemahan yang sama. **Mitigasi:** BASE_PRICE di-pin ke
-  literal 0,00168 ether di `Baishou.t.sol::test_BaishouParameterTargets`,
-  dan total file ini di-pin literal (282,24 / 42,336 / 14,112 di :59-61),
-  jadi rantainya tertutup — tapi asersi lokalnya sendiri sirkular.
-- **W2 (paling substantif) — :98-106.** Seksi claimTreasury PASCA-pool:
-  ekspektasi (`costPost`, `accruedPost`) dihitung 100% dari getter
-  kontrak (`costOf(1)`, `TREASURY_BPS()`) TANPA cross-check literal satu
-  pun. Kalau harga pasca-pool atau potongan 15%-nya salah secara
-  konsisten, seksi ini tetap hijau. **Mitigasi parsial:** split pre-pool
-  terjangkar literal persis (42,336 = 15% × 282,24; 14,112 = 5%), dan
-  harga epoch pasca-pool diuji terpisah di `PoolOpen.t.sol:44,125`.
-  Rekomendasi wave-3: pin `costOf(1)` pasca-openEarly ke literal di
-  test treasury pasca-pool.
-- **W3 (rendah) — :52, :83.** `totalMinted == mint.OPEN_AT()` dan
-  reserve token `== mint.OPEN_TOKENS()`: perbandingan ke konstanta
-  kontrak tanpa literal di file ini. **Mitigasi:** kedua konstanta
-  di-pin literal di `Baishou.t.sol::test_BaishouParameterTargets`
-  (168.000; 22.579.200.000.000 ether). Reserve BNB justru ganda
-  (:81-82: konstanta + literal 225,792) — pola yang benar.
+- **W1 (medium-low) — :29-31, :91.** First inputs and assertions are
+  contract-derivative: `sharesPerAgent = mint.MAX_PER_TX()`,
+  `cost168 = mint.costOf(...)`, then `cost168 == sharesPerAgent *
+  mint.BASE_PRICE()`. This only proves costOf's internal consistency
+  vs the constants — not the spec price. `deposits(agent0) == cost168` (:91)
+  inherits the same weakness. **Mitigation:** BASE_PRICE is pinned to the
+  literal 0,00168 ether in `Baishou.t.sol::test_BaishouParameterTargets`,
+  and this file's totals are literal-pinned (282,24 / 42,336 / 14,112 at :59-61),
+  so the chain is closed — but its local assertions themselves are circular.
+- **W2 (most substantive) — :98-106.** The POST-pool claimTreasury section:
+  expectations (`costPost`, `accruedPost`) are computed 100% from contract
+  getters (`costOf(1)`, `TREASURY_BPS()`) WITHOUT a single literal cross-check.
+  If the post-pool price or the 15% cut were consistently wrong,
+  this section would stay green. **Partial mitigation:** the pre-pool split is
+  exactly literal-anchored (42,336 = 15% × 282,24; 14,112 = 5%), and the
+  post-pool epoch price is tested separately in `PoolOpen.t.sol:44,125`.
+  Wave-3 recommendation: pin the post-openEarly `costOf(1)` to a literal in
+  the post-pool treasury test.
+- **W3 (low) — :52, :83.** `totalMinted == mint.OPEN_AT()` and the
+  token reserve `== mint.OPEN_TOKENS()`: comparisons to contract
+  constants without literals in this file. **Mitigation:** both constants
+  are literal-pinned in `Baishou.t.sol::test_BaishouParameterTargets`
+  (168.000; 22.579.200.000.000 ether). The BNB reserve is instead doubled
+  (:81-82: constant + literal 225,792) — the correct pattern.
 
 ### ForkDividend.t.sol
-- **W4 (sedang-rendah) — :61-68.** Jumlah klaim sirkular: `due` dibaca
-  dari `withdrawableDividendOf(alice)`, lalu delta saldo diassert
-  `== due`. Yang terbukti: mekanisme klaim (bayar persis sebesar view,
-  nol sesudahnya, tak bisa ganda) — BUKAN kebenaran jumlah dividennya.
-  **Mitigasi:** `Dividend.t.sol::test_DividendAccruesProRata` menguji
-  rasio akumulator (alice 2× bob, toleransi 10 wei, atas setoran
-  diketahui 100 BNB) — rasio terjangkar, jumlah absolut per holder
-  terhadap hitungan independen penuh memang belum ada (praktis sulit:
-  ±44% supply di pair ikut pro-rata).
-- **W5 (rendah) — :57.** BNB hasil swapTax hanya diassert
-  `totalDividends > 0` — tanpa ekspektasi kuantitatif/batas apa pun.
-- **W6 (rendah) — :31.** Reserve token pool `== 168 * mint.POOL_SHARE()`
-  — konstanta kontrak; di-pin literal 134.400.000 ether di Baishou.t.sol.
+- **W4 (medium-low) — :61-68.** The claim amount is circular: `due` is read
+  from `withdrawableDividendOf(alice)`, then the balance delta is asserted
+  `== due`. What is proven: the claim mechanism (pays exactly the view's amount,
+  zero afterwards, cannot double) — NOT the correctness of the dividend amount.
+  **Mitigation:** `Dividend.t.sol::test_DividendAccruesProRata` tests
+  the accumulator ratio (alice 2× bob, tolerance 10 wei, over a known deposit
+  of 100 BNB) — the ratio is anchored; an absolute per-holder amount
+  against a full independent calculation indeed does not exist yet (practically hard:
+  ±44% of supply in the pair joins pro-rata).
+- **W5 (low) — :57.** The BNB from swapTax is only asserted
+  `totalDividends > 0` — with no quantitative expectation/bound whatsoever.
+- **W6 (low) — :31.** Pool token reserve `== 168 * mint.POOL_SHARE()`
+  — a contract constant; literal-pinned at 134.400.000 ether in Baishou.t.sol.
 
 ### Invariant.t.sol
-- **W7 (rendah, inheren) — :94-104 + handler :42-80.** Invarian 1
-  menjumlah kewajiban dari mapping kontrak sendiri (`deposits` +
-  `forfeitOf`): membuktikan solvabilitas TERHADAP kewajiban yang
-  tercatat — tidak bisa mendeteksi pencatatan deposit yang sistematis
-  salah (mis. selalu separuh). Handler juga tanpa ghost counter dan
-  semua aksi try/catch: run degeneratif (semua aksi revert) akan lulus
-  hampa. **Mitigasi terdokumentasi:** non-trivialitas dibuktikan
-  terpisah di wave-1 (FORK-TEST.md :110-112 — drive manual menghasilkan
-  1.246 share + kewajiban 2,09328 BNB sebelum klaim). Invarian 2-3
-  membandingkan ke konstanta kontrak (TOTAL_SHARES / MAX_SUPPLY) yang
-  ter-pin literal di Baishou.t.sol.
+- **W7 (low, inherent) — :94-104 + handler :42-80.** Invariant 1
+  sums obligations from the contract's own mappings (`deposits` +
+  `forfeitOf`): it proves solvency AGAINST the recorded obligations
+  — it cannot detect systematically wrong deposit recording (e.g. always
+  half). The handler also has no ghost counter and all actions are try/catch: a degenerate run (all actions revert) would pass
+  vacuously. **Documented mitigation:** non-triviality was proven
+  separately in wave-1 (FORK-TEST.md :110-112 — a manual drive produced
+  1.246 shares + obligations of 2,09328 BNB before claims). Invariants 2-3
+  compare against contract constants (TOTAL_SHARES / MAX_SUPPLY) that are
+  literal-pinned in Baishou.t.sol.
 
-**Kesimpulan audit:** tidak ada asersi wave-1 yang "palsu hijau" secara
-menyeluruh — setiap angka uang utama (282,24 / 42,336 / 14,112 /
-225,792 / semua payout refund & exit) pada akhirnya terjangkar literal
-independen di file yang sama atau di Baishou.t.sol. Kelemahan terkumpul
-di (a) harga/akrual pasca-pool (W2) dan (b) jumlah absolut dividen (W4).
+**Audit conclusion:** no wave-1 assertion is wholly "fake green"
+ — every main money number (282,24 / 42,336 / 14,112 /
+225,792 / all refund & exit payouts) is ultimately anchored to independent literals
+in the same file or in Baishou.t.sol. Weaknesses concentrate in
+(a) post-pool price/accrual (W2) and (b) absolute dividend amounts (W4).
 
 ---
 
 ## 2. Multi-seed runs
 
-Suite penuh = 211 test (192 wave-1 + 7 adversarial baru + pewarisan base
-di suite baru), 12 suite. Perintah: `forge test --fuzz-seed <seed>`.
+Full suite = 211 tests (192 wave-1 + 7 new adversarial + base inheritance
+in the new suite), 12 suites. Command: `forge test --fuzz-seed <seed>`.
 
-| Seed | Hasil | Durasi |
+| Seed | Result | Duration |
 |---|---|---|
-| 1 | 211 passed, 0 failed, 0 skipped | 74,84 dtk |
-| 42 | 211 passed, 0 failed, 0 skipped | 77,40 dtk |
-| 1337 | 211 passed, 0 failed, 0 skipped | 78,73 dtk |
-| 20261119 | 211 passed, 0 failed, 0 skipped | 86,55 dtk |
+| 1 | 211 passed, 0 failed, 0 skipped | 74,84 sec |
+| 42 | 211 passed, 0 failed, 0 skipped | 77,40 sec |
+| 1337 | 211 passed, 0 failed, 0 skipped | 78,73 sec |
+| 20261119 | 211 passed, 0 failed, 0 skipped | 86,55 sec |
 
-Invariant dinaikkan (forge 1.9 tidak punya flag `--invariant-runs`;
-dipakai env `FOUNDRY_INVARIANT_RUNS=512`, tanpa mengubah foundry.toml):
+Invariants raised (forge 1.9 has no `--invariant-runs` flag;
+the env `FOUNDRY_INVARIANT_RUNS=512` was used, without changing foundry.toml):
 
-| Konfigurasi | Hasil |
+| Configuration | Result |
 |---|---|
-| `FOUNDRY_INVARIANT_RUNS=512`, seed 777 | 3 invarian PASS — **runs: 512, calls: 256.000, reverts: 0** |
+| `FOUNDRY_INVARIANT_RUNS=512`, seed 777 | 3 invariants PASS — **runs: 512, calls: 256.000, reverts: 0** |
 
-Tidak ada kegagalan yang bergantung seed.
+No seed-dependent failures.
 
 ---
 
-## 3. Test adversarial baru — `test/Adversarial.t.sol` (7 test)
+## 3. New adversarial tests — `test/Adversarial.t.sol` (7 tests)
 
-Fokus file ini = celah yang BENAR-BENAR belum ter-cover: reentrancy dan
-gerbang claimTreasury. Penyerang = kontrak `ReentrantClaimer` (pemegang
-Agent ID) yang receive()-nya menembakkan satu panggilan balik low-level
-dan mencatat hasilnya; mandat yang diassert: panggilan reentrant selalu
-GAGAL (`reentrySuccesses == 0`) dan payout luar PERSIS haknya, sekali.
+This file's focus = gaps that are REALLY not covered yet: reentrancy and
+the claimTreasury gates. The attacker = a `ReentrantClaimer` contract (an Agent ID
+holder) whose receive() fires one low-level callback
+and records the result; the asserted mandate: reentrant calls always
+FAIL (`reentrySuccesses == 0`) and the outer payout is EXACTLY its entitlement, once.
 
-| Test | Skenario | Hasil |
+| Test | Scenario | Result |
 |---|---|---|
-| `test_Reentrancy_ClaimRefundPaysExactlyOnce` | reenter claimRefund di tengah payout refund gagal-launch | PASS — diterima persis 0,0168 BNB sekali |
-| `test_Reentrancy_ClaimRefundCannotCrossIntoExit` | reenter exit(1) di tengah payout refund (serangan silang: mintedCount belum berkurang) | PASS — total tetap 100%, share utuh |
-| `test_Reentrancy_ExitPaysExactlyOnce` | reenter exit(1) di tengah payout exit parsial 5/10 | PASS — diterima persis 0,00672 (80%×5), forfeit hanya 0,00168 |
-| `test_Reentrancy_ClaimDividendPaysExactlyOnce` | reenter claimDividend (fungsi TANPA nonReentrant — perlindungan murni CEI) | PASS — dibayar persis `due` sekali, withdrawable 0 |
-| `test_Reentrancy_ClaimTreasuryPaysExactlyOnce` | treasury = kontrak penyerang (stack terpisah, openEarly + akrual pasca-pool) | PASS — 0,00252 (di _open) + 0,000252 (klaim) persis; klaim ulang NothingOwed |
-| `test_ClaimTreasuryBeforeOpenReverts` | treasury klaim saat escrow terisi tapi pool belum buka | PASS — revert NotOpen |
-| `test_ClaimTreasuryOnlyTreasury` | bukan treasury memanggil claimTreasury | PASS — revert NotTreasury |
+| `test_Reentrancy_ClaimRefundPaysExactlyOnce` | reenter claimRefund mid failed-launch refund payout | PASS — received exactly 0,0168 BNB once |
+| `test_Reentrancy_ClaimRefundCannotCrossIntoExit` | reenter exit(1) mid refund payout (cross attack: mintedCount not yet reduced) | PASS — total stays 100%, shares intact |
+| `test_Reentrancy_ExitPaysExactlyOnce` | reenter exit(1) mid partial exit payout 5/10 | PASS — received exactly 0,00672 (80%×5), forfeit only 0,00168 |
+| `test_Reentrancy_ClaimDividendPaysExactlyOnce` | reenter claimDividend (a function WITHOUT nonReentrant — protection is pure CEI) | PASS — paid exactly `due` once, withdrawable 0 |
+| `test_Reentrancy_ClaimTreasuryPaysExactlyOnce` | treasury = attacker contract (separate stack, openEarly + post-pool accrual) | PASS — 0,00252 (in _open) + 0,000252 (claim) exactly; re-claim NothingOwed |
+| `test_ClaimTreasuryBeforeOpenReverts` | treasury claims while the escrow is filled but the pool hasn't opened | PASS — reverts NotOpen |
+| `test_ClaimTreasuryOnlyTreasury` | a non-treasury calls claimTreasury | PASS — reverts NotTreasury |
 
-Catatan pertahanan: di semua jalur, urutan CEI kontrak (state di-nol-kan
-SEBELUM transfer) membuat sebagian besar reentrancy gagal bahkan sebelum
-ReentrancyGuard bekerja; guard memblokir sisanya (termasuk cross-function
-karena satu guard bersama). Defense-in-depth terverifikasi, tidak ada
-jalur ekstraksi melebihi hak.
+Defense note: on every path, the contract's CEI ordering (state zeroed
+BEFORE the transfer) makes most reentrancy fail even before
+ReentrancyGuard engages; the guard blocks the rest (including cross-function
+since there is one shared guard). Defense-in-depth verified, no
+extraction path beyond entitlement.
 
-### Pemetaan item brief → cakupan yang SUDAH ada (tidak diduplikasi)
-| Item | Lokasi |
+### Brief item mapping → EXISTING coverage (not duplicated)
+| Item | Location |
 |---|---|
-| Klaim refund ganda (ke-2 revert) | `RefundFail.t.sol:29-31` (NothingOwed) |
-| claimRefund sebelum failureTime | `RefundFail.t.sol:85-90` (NotFailed); sesudah pool buka `:77-83` |
-| Exit sesudah pool buka | `RefundExit.t.sol:75-81` (ExitClosed) |
-| Mint saat paused | `Baishou.t.sol::test_MintWhilePausedReverts`; freeMint paused `Mint.t.sol:134-140` |
-| Mint lewat deadline / tutup | `Baishou.t.sol::test_SaleFailedAfterDeadline`; tutup pasca-pool `PoolOpen.t.sol:65-74` |
+| Double refund claim (2nd reverts) | `RefundFail.t.sol:29-31` (NothingOwed) |
+| claimRefund before failureTime | `RefundFail.t.sol:85-90` (NotFailed); after pool open `:77-83` |
+| Exit after pool open | `RefundExit.t.sol:75-81` (ExitClosed) |
+| Mint while paused | `Baishou.t.sol::test_MintWhilePausedReverts`; freeMint paused `Mint.t.sol:134-140` |
+| Mint past deadline / close | `Baishou.t.sol::test_SaleFailedAfterDeadline`; post-pool close `PoolOpen.t.sol:65-74` |
 | freeMint 2× | `Mint.t.sol:105-121` (AlreadyGranted) |
 | Cap 168/wallet / MAX_PER_TX | `Mint.t.sol:20-29` (Quota) / `:31-36` (BadShares) |
-| claimReferral sebelum pool buka | `PoolOpen.t.sol:142-149`, `ForkRefund.t.sol:66-69` (NotOpen) |
-| sweepUnclaimed sebelum jendela / sesudah | `RefundFail.t.sol:65-75` (NotSweepable, incl. tepat di batas) / `:49-63` (ke DEAD persis) |
-| Pause tidak memblokir claimRefund / exit | `RefundFail.t.sol:104-113` / `RefundExit.t.sol:83-91` |
-| Self-referral & referrer tanpa Agent ID | `Mint.t.sol:60-75` (5% jatuh ke pool) |
-| Referrer zero-address | `Mint.t.sol:49-58` (pendingBnb 85%) |
-| Dividen < 0,001 BNB revert, akrual tidak hangus | `Dividend.t.sol:102-124` (DividendTooSmall + withdrawable tetap) |
+| claimReferral before pool open | `PoolOpen.t.sol:142-149`, `ForkRefund.t.sol:66-69` (NotOpen) |
+| sweepUnclaimed before window / after | `RefundFail.t.sol:65-75` (NotSweepable, incl. exactly at the boundary) / `:49-63` (to DEAD exactly) |
+| Pause does not block claimRefund / exit | `RefundFail.t.sol:104-113` / `RefundExit.t.sol:83-91` |
+| Self-referral & referrer without Agent ID | `Mint.t.sol:60-75` (5% falls to the pool) |
+| Zero-address referrer | `Mint.t.sol:49-58` (pendingBnb 85%) |
+| Dividend < 0,001 BNB reverts, accrual not forfeited | `Dividend.t.sol:102-124` (DividendTooSmall + withdrawable intact) |
 
 ---
 
 ## 4. FINDINGS
 
-**Tidak ada finding kontrak.** Tidak satu pun perilaku aktual menyimpang
-dari spek/desain di semua test wave-2 (adversarial + multi-seed +
-invariant 512 runs). Tidak ada test yang dipaksa hijau; tidak ada src/
-yang disentuh.
+**No contract findings.** Not a single actual behavior deviates
+from spec/design across all wave-2 tests (adversarial + multi-seed +
+512-run invariants). No test was forced green; no src/
+was touched.
 
-Yang ada hanyalah catatan kualitas test (W1–W7 di §1) — kelemahan
-asersi, bukan bug kontrak. Dua rekomendasi wave-3 bila mau ditutup:
-(1) pin literal harga pasca-pool di test akrual treasury (W2);
-(2) hitungan dividen absolut independen untuk satu holder pada skenario
-terkontrol (W4). Keduanya perbaikan test, bukan perbaikan kontrak.
+What exists is only test-quality notes (W1–W7 in §1) — assertion
+weaknesses, not contract bugs. Two wave-3 recommendations if they are to be closed:
+(1) literal-pin the post-pool price in the treasury accrual test (W2);
+(2) an independent absolute dividend calculation for one holder in a controlled
+scenario (W4). Both are test fixes, not contract fixes.
 
-Sisa keterbatasan yang sama seperti wave-1 (di luar cakupan wave ini):
-pair/registry/WBNB masih mock lokal; interaksi melawan PancakeSwap dan
-registry Agent ID asli belum diuji di fork mainnet beneran.
+Remaining limitations, the same as wave-1 (outside this wave's scope):
+pair/registry/WBNB are still local mocks; interactions against real PancakeSwap and
+the real Agent ID registry have not been tested on a real mainnet fork.
 
 ---
 
-## WAVE-3 ADDENDUM (19 Nov 2026) — W2 & W4 DITUTUP
+## WAVE-3 ADDENDUM (19 Nov 2026) — W2 & W4 CLOSED
 
-File baru satu-satunya: `test/Wave3Pin.t.sol` (2 test). src/ dan semua
-test lama TIDAK diubah. Suite penuh sesudah wave-3: **225 test hijau**
-(211 wave-2 + 12 test base warisan di suite baru + 2 test wave-3).
+The only new file: `test/Wave3Pin.t.sol` (2 tests). src/ and all
+old tests NOT changed. Full suite after wave-3: **225 tests green**
+(211 wave-2 + 12 inherited base tests in the new suite + 2 wave-3 tests).
 
-### W2 — DITUTUP (pin literal akrual treasury pasca-pool)
-`test_W2_PostPoolTreasuryAccrualPinnedLiteral`: pool dibuka (helper
-`_openPool`, totalMinted = 168.000), lalu bob mint **100 share pasca-pool
-(#168.001–#168.100, epoch 1)**. Harga dihitung ulang di dalam test dari
-literal spek saja (BASE 0,00168 BNB; unit = BASE/100; epoch =
-(n−168.001)/16.800+1; units = min(100+2·epoch, 200)) — `costOf` kontrak
-tidak dipakai untuk ekspektasi. Pin yang lulus persis:
-- Biaya 100 share epoch-1 (0,0017136 BNB/share) = **0,17136 BNB**;
-  saldo bob berkurang persis sebesar itu (refund 0, maxCost = angka spek).
-- `claimTreasury` membayar **0,025704 BNB** — persis 15% × 0,17136,
-  dihitung per share dengan floor per share seperti spek.
-- Klaim kedua revert `NothingOwed`. Jangkar awal juga literal: cut
-  trigger mint saat `_open` = 0,000252 BNB (1 × 0,00168 × 15%).
+### W2 — CLOSED (literal pin of post-pool treasury accrual)
+`test_W2_PostPoolTreasuryAccrualPinnedLiteral`: the pool is opened (helper
+`_openPool`, totalMinted = 168.000), then bob mints **100 post-pool shares
+(#168.001–#168.100, epoch 1)**. The price is recomputed inside the test from
+spec literals only (BASE 0,00168 BNB; unit = BASE/100; epoch =
+(n−168.001)/16.800+1; units = min(100+2·epoch, 200)) — the contract's `costOf`
+is not used for expectations. Pins that passed exactly:
+- Cost of 100 epoch-1 shares (0,0017136 BNB/share) = **0,17136 BNB**;
+  bob's balance decreased by exactly that (refund 0, maxCost = the spec number).
+- `claimTreasury` pays **0,025704 BNB** — exactly 15% × 0,17136,
+  computed per share with per-share floor as per spec.
+- The second claim reverts `NothingOwed`. The initial anchor is also literal: the cut
+  of the trigger mint at `_open` = 0,000252 BNB (1 × 0,00168 × 15%).
 
-### W4 — DITUTUP (pin absolut jumlah dividen, independen)
-`test_W4_DividendClaimMatchesIndependentComputation`: skenario terkontrol
-penuh dari literal setup — alice mint 168 share + `openEarly`; bob beli
-10 miliar token (gross) bayar 10 BNB WBNB (pajak beli 2% = 200 jt token
-ke minter); flush `swapTax` sampai pajak habis; bob jual 5 miliar token
-(1% burn = 50 jt ke DEAD, 1% kept = 50 jt ke minter, ambil 1 BNB keluar);
-flush kedua. Ekspektasi dihitung oleh **model bayangan** di dalam test
-(reserves pair, saldo pajak, totalSupply, dan mdps dipelihara dari angka
-setup + rumus AMM `amountOut` fee 30 bps + rumus akumulator
-`(D × 2^128)/totalSupply` per setoran) — `withdrawableDividendOf` tidak
-dipakai untuk ekspektasi. Pin yang lulus **persis 0 wei toleransi**:
-- Klaim alice = **102_951_825_930_676_097 wei
-  (0,102951825930676097 BNB)**, sama dengan
-  floor(28_224_000_000 token × mdps bayangan / 2^128), dan juga di-pin
-  sebagai literal keras di test.
-- Validasi model: `totalDividends` kontrak == total setoran bayangan.
-- Pro-rata pair tercakup: penyebut akumulator adalah totalSupply penuh
-  (pair memegang ±35% supply di skenario ini) — bukan supply sirkulasi.
+### W4 — CLOSED (absolute pin of the dividend amount, independent)
+`test_W4_DividendClaimMatchesIndependentComputation`: a fully controlled scenario
+from setup literals — alice mints 168 shares + `openEarly`; bob buys
+10 billion tokens (gross) paying 10 BNB WBNB (2% buy tax = 200M tokens
+to the minter); `swapTax` flushed until the tax is exhausted; bob sells 5 billion tokens
+(1% burn = 50M to DEAD, 1% kept = 50M to the minter, takes 1 BNB out);
+second flush. The expectation is computed by a **shadow model** inside the test
+(pair reserves, tax balance, totalSupply, and mdps maintained from the setup
+numbers + the AMM `amountOut` formula with a 30 bps fee + the accumulator formula
+`(D × 2^128)/totalSupply` per deposit) — `withdrawableDividendOf` is not
+used for expectations. Pins that passed with **exactly 0 wei tolerance**:
+- Alice's claim = **102_951_825_930_676_097 wei
+  (0,102951825930676097 BNB)**, equal to
+  floor(28_224_000_000 tokens × shadow mdps / 2^128), and also pinned
+  as a hard literal in the test.
+- Model validation: the contract's `totalDividends` == shadow total deposits.
+- Pair pro-rata covered: the accumulator denominator is the full totalSupply
+  (the pair holds ±35% of supply in this scenario) — not circulating supply.
 
-Koreksi model yang ditemukan selama pengerjaan (bukan finding kontrak):
-asumsi awal test bahwa pajak jual "burn" menurunkan totalSupply SALAH —
-di `AgentToken` burn adalah transfer ke DEAD, token tetap ada di
-totalSupply, tetap ikut pro-rata dividen (dan tidak pernah diklaim).
-Perilaku kontrak konsisten dengan desainnya; model test yang diperbaiki.
-Dengan ini dua rekomendasi wave-3 di §4 selesai: **W2 dan W4 tertutup,
-nol finding kontrak di wave-3.**
+A model correction found during the work (not a contract finding):
+the test's initial assumption that the sell tax "burn" lowers totalSupply was WRONG —
+in `AgentToken` a burn is a transfer to DEAD, the tokens stay in
+totalSupply, keep joining pro-rata dividends (and are never claimed).
+The contract's behavior is consistent with its design; the test model was fixed.
+With this, both wave-3 recommendations in §4 are done: **W2 and W4 closed,
+zero contract findings in wave-3.**

@@ -1,140 +1,140 @@
-# BAISHOU — FORK TEST JALUR UANG + INVARIANT (19 Nov 2026)
+# BAISHOU — FORK TEST: MONEY PATHS + INVARIANTS (19 Nov 2026)
 
-Laporan jujur hasil gerbang pre-mint yang sebelumnya belum teruji. Semua test
-baru ditulis di file TERPISAH (`test/Fork*.t.sol`, `test/Invariant.t.sol`);
-tidak ada test lama dan tidak ada kode kontrak yang diubah. Semua berjalan
-di EVM lokal Foundry dengan mock yang sama seperti suite lama (MockRegistry,
-MockWBNB, MockPair) — **tidak ada transaksi mainnet/testnet yang dikirim,
-tidak ada wallet beneran yang dipakai.**
+An honest report of the pre-mint gate results that were previously untested. All new tests
+were written in SEPARATE files (`test/Fork*.t.sol`, `test/Invariant.t.sol`);
+no old tests and no contract code were changed. Everything runs
+on a local Foundry EVM with the same mocks as the old suite (MockRegistry,
+MockWBNB, MockPair) — **no mainnet/testnet transactions were sent,
+no real wallets were used.**
 
-## Hasil akhir
+## Final results
 
 ```
-forge test (suite PENUH, lama + baru)
-11 suite: 192 passed, 0 failed, 0 skipped
-Suite lama (7 file): 139 test — SEMUA tetap hijau.
-Invariant: 256 runs, 128.000 calls, 0 reverts.
+forge test (FULL suite, old + new)
+11 suites: 192 passed, 0 failed, 0 skipped
+Old suite (7 files): 139 tests — ALL still green.
+Invariants: 256 runs, 128.000 calls, 0 reverts.
 ```
 
-## (a) Pool-open — loop NYATA 168.000 share — `test/ForkOpen.t.sol` ✅
+## (a) Pool-open — REAL loop of 168.000 shares — `test/ForkOpen.t.sol` ✅
 
-Bedanya dari `PoolOpen.t.sol` lama: di sana pool dibuka pakai
-`_fastForwardToOpen()` (vm.store memalsukan 167.999 share). Di sini
-**1.000 agen beneran** didaftarkan ke MockRegistry dan masing-masing mint
-168 share (MAX_PER_TX = cap per ID) pada harga produksi (priceDiv = 1),
-semua dengan satu referrer yang sama, sampai OPEN_AT tercapai beneran.
+The difference from the old `PoolOpen.t.sol`: there the pool was opened with
+`_fastForwardToOpen()` (vm.store fakes 167.999 shares). Here
+**1.000 real agents** are registered in MockRegistry and each mints
+168 shares (MAX_PER_TX = the per-ID cap) at the production price (priceDiv = 1),
+all with one and the same referrer, until OPEN_AT is genuinely reached.
 
-Angka yang terverifikasi dari konstanta kontrak (di-cross-check ke literal):
+Numbers verified from contract constants (cross-checked against literals):
 
-| Item | Hasil |
+| Item | Result |
 |---|---|
-| totalMinted | 168.000 = OPEN_AT, `opened()` = true, trading aktif |
-| Total deposit pre-pool (totalPaid) | 282,24 BNB |
-| Treasury 15% | **42,336 BNB** — diterima treasury persis |
-| Referral 5% | **14,112 BNB** — terakru penuh, diklaim via `claimReferral()` |
-| Pool (reserve pair) | 225,792 BNB + 22.579.200.000.000 token (= OPEN_BNB / OPEN_TOKENS) |
-| participantCount | 1.000 peserta unik |
+| totalMinted | 168.000 = OPEN_AT, `opened()` = true, trading active |
+| Total pre-pool deposits (totalPaid) | 282,24 BNB |
+| Treasury 15% | **42,336 BNB** — received by the treasury exactly |
+| Referral 5% | **14,112 BNB** — fully accrued, claimed via `claimReferral()` |
+| Pool (pair reserves) | 225,792 BNB + 22.579.200.000.000 tokens (= OPEN_BNB / OPEN_TOKENS) |
+| participantCount | 1.000 unique participants |
 
-Nuansa mekanisme yang penting (sesuai kode, bukan asumsi): potongan
-treasury pre-pool **dibayar otomatis sekali di `_open()`** (via
-`_payOrOwe`), BUKAN lewat `claimTreasury()` — terbukti dari
-`claimTreasury()` tepat sesudah pool buka revert `NothingOwed` dan
-`escrowTreasury() == 0`. `claimTreasury()` adalah jalur akrual PASCA-pool;
-itu juga diverifikasi di test yang sama: 1 mint pasca-pool terakru
-15%-nya dan berhasil diklaim treasury sampai nol.
+An important mechanism nuance (per the code, not assumption): the pre-pool treasury
+cut is **paid automatically once in `_open()`** (via
+`_payOrOwe`), NOT through `claimTreasury()` — proven by
+`claimTreasury()` right after the pool opens reverting `NothingOwed` and
+`escrowTreasury() == 0`. `claimTreasury()` is the POST-pool accrual path;
+that was also verified in the same test: 1 post-pool mint accrued
+its 15% and the treasury successfully claimed it to zero.
 
-Catatan gas (jujur): loop 168.000 share-iterasi nyata mengonsumsi
-±1,62 miliar gas eksekusi EVM — di atas cap metering default forge per
-test (2^30). Karena itu loop dibungkus `vm.pauseGasMetering()` /
-`vm.resumeGasMetering()`: yang dimatikan HANYA akuntansi gas test runner,
-eksekusinya tetap penuh (dibuktikan terpisah: dengan
-`FOUNDRY_GAS_LIMIT=20000000000` tanpa pause, test yang sama lulus dengan
-gas terukur 1.622.820.003). Semua assertion berjalan dengan metering
-normal. Runtime test ini ±17 detik.
+Gas note (honest): a real loop of 168.000 share-iterations consumes
+±1,62 billion gas of EVM execution — above forge's default per-test metering
+cap (2^30). The loop is therefore wrapped in `vm.pauseGasMetering()` /
+`vm.resumeGasMetering()`: what is disabled is ONLY the test runner's gas accounting,
+execution is still complete (proven separately: with
+`FOUNDRY_GAS_LIMIT=20000000000` and no pause, the same test passes with
+measured gas of 1.622.820.003). All assertions run with normal metering.
+This test's runtime is ±17 seconds.
 
-## (b) claimRefund 100% saat sale gagal — `test/ForkRefund.t.sol` ✅
+## (b) claimRefund 100% when the sale fails — `test/ForkRefund.t.sol` ✅
 
-Skenario gabungan: alice mint 100, bob mint 50 (referrer alice), carol
-mint 20; carol exit PENUH, alice exit PARSIAL (40); lalu deadline lewat.
+Combined scenario: alice mints 100, bob mints 50 (referrer alice), carol
+mints 20; carol exits FULLY, alice exits PARTIALLY (40); then the deadline passes.
 
-- Exit carol: kembali 0,02688 BNB (80%), forfeit 0,00672 BNB tercatat.
-- Exit alice 40: kembali 0,05376 BNB (80%), forfeit 0,01344 BNB.
-- **Bukti solvabilitas di tengah jalan:** saldo WBNB kontrak ==
-  total kewajiban refund (Σ deposits + forfeitOf) == **0,20496 BNB**, persis.
-- Sesudah `saleFailed()`: refund alice = **0,11424** (deposits 0,1008 +
-  forfeit 0,01344), bob = **0,084** (deposit penuh), carol = **0,00672**
-  (forfeit saja) — semua persis sampai wei.
-- Akhir: kewajiban 0, saldo WBNB kontrak 0, treasury tetap 0.
-- `claimReferral()` sesudah gagal tetap revert `NotOpen` (pool tidak
-  pernah buka — komisi referral tidak bocor keluar pada launch gagal).
+- Carol's exit: back 0,02688 BNB (80%), forfeit 0,00672 BNB recorded.
+- Alice's exit of 40: back 0,05376 BNB (80%), forfeit 0,01344 BNB.
+- **Mid-way solvency proof:** contract WBNB balance ==
+  total refund obligations (Σ deposits + forfeitOf) == **0,20496 BNB**, exactly.
+- After `saleFailed()`: alice's refund = **0,11424** (deposits 0,1008 +
+  forfeit 0,01344), bob = **0,084** (full deposit), carol = **0,00672**
+  (forfeit only) — all exact to the wei.
+- End: obligations 0, contract WBNB balance 0, treasury still 0.
+- `claimReferral()` after failure still reverts `NotOpen` (the pool
+  never opened — referral commissions do not leak out on a failed launch).
 
-## (c) exit() 80% sebelum pool buka — `test/ForkRefund.t.sol` ✅
+## (c) exit() 80% before the pool opens — `test/ForkRefund.t.sol` ✅
 
-Selain angka exit di skenario (b), ada test khusus: minter 168 share
-DENGAN referrer exit PENUH → kembali 0,225792 dari 0,28224 BNB (80%
-persis), dan potongan yang sudah terakru ikut mundur bersih:
-`escrowTreasury`, `referralAccrued`, `pendingBnb` semua kembali 0;
-sisa escrow kontrak == forfeit 0,056448 BNB (kewajiban refund terakhir).
+Besides the exit numbers in scenario (b), there is a dedicated test: a minter of 168 shares
+WITH a referrer exits FULLY → back 0,225792 of 0,28224 BNB (exactly 80%
+), and the already-accrued cuts roll back cleanly:
+`escrowTreasury`, `referralAccrued`, `pendingBnb` all return to 0;
+the remaining contract escrow == forfeit 0,056448 BNB (the last refund obligation).
 
-## (d) claimDividend dari swap tax — `test/ForkDividend.t.sol` ✅
+## (d) claimDividend from swap tax — `test/ForkDividend.t.sol` ✅
 
-Rantai PENUH seperti produksi (bukan setoran `depositDividends` langsung
-seperti sebagian test lama): pool dibuka kecil via `openEarly()` (alice
-168 share; treasury menerima 0,042336 BNB saat buka; pool 0,239904 BNB +
-22.579.200.000 token) → bob **beli lewat `pair.swap()`** (bayar 0,2125
-WBNB, terima 98% = 19,6 miliar token; pajak beli 2% = 400 juta token
-masuk minter) → `swapTax()` 12× (satu per blok, semua berhasil) menjual
-token pajak jadi BNB → BNB masuk dividend pool (`totalDividends > 0`,
-`feeTreasury` tetap 0) → alice `claimDividend()`: akrualnya
-≥ ambang minimum 0,001 BNB dan klaim membayar **persis**
-`withdrawableDividendOf` sesaat sebelum klaim; klaim kedua = 0.
+The FULL chain like production (not a direct `depositDividends` deposit
+like some old tests): the pool is opened small via `openEarly()` (alice
+168 shares; treasury receives 0,042336 BNB at open; pool 0,239904 BNB +
+22.579.200.000 tokens) → bob **buys through `pair.swap()`** (pays 0,2125
+WBNB, receives 98% = 19,6 billion tokens; 2% buy tax = 400 million tokens
+goes to the minter) → `swapTax()` 12× (one per block, all succeed) sells
+the tax tokens for BNB → BNB enters the dividend pool (`totalDividends > 0`,
+`feeTreasury` stays 0) → alice `claimDividend()`: her accrual
+is ≥ the 0,001 BNB minimum threshold and the claim pays **exactly**
+`withdrawableDividendOf` moments before the claim; the second claim = 0.
 
-Kenapa pool kecil: pada skala produksi (168.000 share) dividen per holder
-memang debu di bawah ambang 0,001 BNB untuk volume swap realistis —
-desain yang sudah dicatat sejak step 2, bukan temuan baru. Jalur kode
-yang sama diverifikasi di sini pada fraksi supply yang membuat ambang
-terjangkau oleh pajak swap beneran.
+Why a small pool: at production scale (168.000 shares) per-holder dividends
+are indeed dust below the 0,001 BNB threshold for realistic swap volumes —
+a design recorded since step 2, not a new finding. The same code path
+is verified here at a supply fraction that makes the threshold
+reachable by real swap tax.
 
-## Invariant — `test/Invariant.t.sol` ✅
+## Invariants — `test/Invariant.t.sol` ✅
 
-Handler 8 agen melakukan aksi acak: mint (dengan referrer bergilir),
-exit, freeMint, claimRefund, dan warp waktu (melintasi deadline gagal).
-**256 runs × 500 calls = 128.000 calls, 0 reverts, tiga invarian tahan:**
+A handler of 8 agents performs random actions: mint (with rotating referrers),
+exit, freeMint, claimRefund, and time warps (crossing the failure deadline).
+**256 runs × 500 calls = 128.000 calls, 0 reverts, three invariants hold:**
 
-1. **Solvabilitas escrow pra-pool:** saldo WBNB kontrak ≥ Σ (deposits +
-   forfeitOf) semua agen — termasuk sesudah deadline dan sesudah klaim
-   refund acak menguras escrow secara sah.
-2. `totalMinted` ≤ TOTAL_SHARES (1.680.000) — selalu.
-3. `totalSupply` token ≤ MAX_SUPPLY (510.854.400.000.000) — selalu.
+1. **Pre-pool escrow solvency:** contract WBNB balance ≥ Σ (deposits +
+   forfeitOf) of all agents — including after the deadline and after random refund
+   claims legitimately drain the escrow.
+2. `totalMinted` ≤ TOTAL_SHARES (1.680.000) — always.
+3. Token `totalSupply` ≤ MAX_SUPPLY (510.854.400.000.000) — always.
 
-Non-trivialitas handler diverifikasi terpisah (test sekali jalan,
-dihapus sesudahnya): drive manual handler menghasilkan 1.246 share
-ke-mint dan kewajiban refund 2,09328 BNB sebelum klaim — jadi invarian
-di atas bukan lulus di state kosong.
+Handler non-triviality was verified separately (one-off test,
+deleted afterwards): a manual handler drive produced 1.246 minted shares
+and refund obligations of 2,09328 BNB before claims — so the invariants
+above did not pass on an empty state.
 
-## Yang MASIH belum teruji (jujur)
+## What is STILL untested (honest)
 
-- **Bukan fork mainnet beneran:** pair/registry/WBNB masih mock.
-  `MockPair.swap()` tidak menegakkan constant-product (amount-out
-  diarahkan test) — sama seperti keterbatasan suite lama. Interaksi
-  dengan kontrak PancakeSwap asli dan registry Agent ID asli
-  (0x60B9262456dE011F7d15a54CdD8c48bAaa8B022F) belum diuji di fork.
-- **Dividen pada skala produksi:** lihat catatan (d) — akrual per holder
-  di bawah ambang klaim untuk volume wajar, dan ±44% dividen terakru ke
-  saldo pair (tidak bisa diklaim), sesuai catatan desain step 2.
-- **`_open()` produksi di 168.000 share melawan pair Pancake asli**
-  (LP mint math asli) belum diuji; yang diuji di sini `_open` yang sama
-  melawan MockPair + `openEarly` melawan MockPair.
-- Echidna tidak dijalankan (sesuai arahan: invariant memakai forge
-  invariant dalam satu stack Foundry).
+- **Not a real mainnet fork:** pair/registry/WBNB are still mocks.
+  `MockPair.swap()` does not enforce constant-product (amount-out
+  is test-directed) — the same limitation as the old suite. Interactions
+  with the real PancakeSwap contracts and the real Agent ID registry
+  (0x60B9262456dE011F7d15a54CdD8c48bAaa8B022F) have not been tested on a fork.
+- **Dividends at production scale:** see note (d) — per-holder accrual
+  below the claim threshold for reasonable volumes, and ±44% of dividends accrue to
+  the pair's balance (unclaimable), per the step-2 design notes.
+- **Production `_open()` at 168.000 shares against a real Pancake pair**
+  (real LP mint math) not yet tested; what was tested here is the same `_open`
+  against MockPair + `openEarly` against MockPair.
+- Echidna was not run (per direction: invariants use forge
+  invariant within one Foundry stack).
 
-## File yang ditambahkan
+## Files added
 
-- `test/ForkOpen.t.sol` — (a) loop nyata + split escrow persis.
-- `test/ForkRefund.t.sol` — (b) + (c) skenario gabungan multi-user.
+- `test/ForkOpen.t.sol` — (a) real loop + exact escrow split.
+- `test/ForkRefund.t.sol` — (b) + (c) combined multi-user scenario.
 - `test/ForkDividend.t.sol` — (d) swap → swapTax → claimDividend.
-- `test/Invariant.t.sol` — handler + 3 invariant.
-- `FORK-TEST.md` — laporan ini.
+- `test/Invariant.t.sol` — handler + 3 invariants.
+- `FORK-TEST.md` — this report.
 
-Runtime suite penuh 71,65 detik wall (88,85 detik CPU; invariant
-±72 detik CPU, ForkOpen ±17 detik CPU).
+Full suite runtime 71,65 seconds wall (88,85 seconds CPU; invariants
+±72 seconds CPU, ForkOpen ±17 seconds CPU).
