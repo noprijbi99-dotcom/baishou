@@ -179,3 +179,52 @@ terkontrol (W4). Keduanya perbaikan test, bukan perbaikan kontrak.
 Sisa keterbatasan yang sama seperti wave-1 (di luar cakupan wave ini):
 pair/registry/WBNB masih mock lokal; interaksi melawan PancakeSwap dan
 registry Agent ID asli belum diuji di fork mainnet beneran.
+
+---
+
+## WAVE-3 ADDENDUM (19 Nov 2026) — W2 & W4 DITUTUP
+
+File baru satu-satunya: `test/Wave3Pin.t.sol` (2 test). src/ dan semua
+test lama TIDAK diubah. Suite penuh sesudah wave-3: **225 test hijau**
+(211 wave-2 + 12 test base warisan di suite baru + 2 test wave-3).
+
+### W2 — DITUTUP (pin literal akrual treasury pasca-pool)
+`test_W2_PostPoolTreasuryAccrualPinnedLiteral`: pool dibuka (helper
+`_openPool`, totalMinted = 168.000), lalu bob mint **100 share pasca-pool
+(#168.001–#168.100, epoch 1)**. Harga dihitung ulang di dalam test dari
+literal spek saja (BASE 0,00168 BNB; unit = BASE/100; epoch =
+(n−168.001)/16.800+1; units = min(100+2·epoch, 200)) — `costOf` kontrak
+tidak dipakai untuk ekspektasi. Pin yang lulus persis:
+- Biaya 100 share epoch-1 (0,0017136 BNB/share) = **0,17136 BNB**;
+  saldo bob berkurang persis sebesar itu (refund 0, maxCost = angka spek).
+- `claimTreasury` membayar **0,025704 BNB** — persis 15% × 0,17136,
+  dihitung per share dengan floor per share seperti spek.
+- Klaim kedua revert `NothingOwed`. Jangkar awal juga literal: cut
+  trigger mint saat `_open` = 0,000252 BNB (1 × 0,00168 × 15%).
+
+### W4 — DITUTUP (pin absolut jumlah dividen, independen)
+`test_W4_DividendClaimMatchesIndependentComputation`: skenario terkontrol
+penuh dari literal setup — alice mint 168 share + `openEarly`; bob beli
+10 miliar token (gross) bayar 10 BNB WBNB (pajak beli 2% = 200 jt token
+ke minter); flush `swapTax` sampai pajak habis; bob jual 5 miliar token
+(1% burn = 50 jt ke DEAD, 1% kept = 50 jt ke minter, ambil 1 BNB keluar);
+flush kedua. Ekspektasi dihitung oleh **model bayangan** di dalam test
+(reserves pair, saldo pajak, totalSupply, dan mdps dipelihara dari angka
+setup + rumus AMM `amountOut` fee 30 bps + rumus akumulator
+`(D × 2^128)/totalSupply` per setoran) — `withdrawableDividendOf` tidak
+dipakai untuk ekspektasi. Pin yang lulus **persis 0 wei toleransi**:
+- Klaim alice = **102_951_825_930_676_097 wei
+  (0,102951825930676097 BNB)**, sama dengan
+  floor(28_224_000_000 token × mdps bayangan / 2^128), dan juga di-pin
+  sebagai literal keras di test.
+- Validasi model: `totalDividends` kontrak == total setoran bayangan.
+- Pro-rata pair tercakup: penyebut akumulator adalah totalSupply penuh
+  (pair memegang ±35% supply di skenario ini) — bukan supply sirkulasi.
+
+Koreksi model yang ditemukan selama pengerjaan (bukan finding kontrak):
+asumsi awal test bahwa pajak jual "burn" menurunkan totalSupply SALAH —
+di `AgentToken` burn adalah transfer ke DEAD, token tetap ada di
+totalSupply, tetap ikut pro-rata dividen (dan tidak pernah diklaim).
+Perilaku kontrak konsisten dengan desainnya; model test yang diperbaiki.
+Dengan ini dua rekomendasi wave-3 di §4 selesai: **W2 dan W4 tertutup,
+nol finding kontrak di wave-3.**
