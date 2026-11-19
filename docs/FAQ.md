@@ -20,19 +20,32 @@ anyone can buy on the BAISHOU/WBNB market after the pool opens.
    until the target resolves.
 
 **How much is a share?**
-The first 168,000 shares cost a flat **0.00168 BNB** each. After the pool
-opens, the price rises +2% per 16,800 shares sold, capped at
-**0.00336 BNB**. The tokens per share never change: always 168,000,000.
+Every share costs a flat **0.00168 BNB** — all 168,000 of them. There is
+no price curve: the first share and the last share cost exactly the same.
+The tokens per share never change either: always 168,000,000.
 
 **Is there a free claim?**
-Yes — **16,800 shares are free**, one free allocation per Agent ID,
-first-come, first-served while they last.
+Yes — **16,800 free claims**, each worth one share's tokens
+(168,000,000), one per Agent ID, first-come, first-served while they last.
 
 **What happens at 168,000 shares?**
 The pool opens: at least **225.792 BNB** and **22,579,200,000,000 tokens**
 seed the BAISHOU/WBNB pair, the LP is burned, and the escrowed treasury
-(15%) and referral (5%) shares are paid out. The mint then stays open for
-7 more days at the rising curve price.
+(15%) and referral (5%) shares are paid out. The mint ends at that same
+moment — it is paused by the admin, exactly as announced in advance. From
+then on, the only way to buy BAISHOU is the market pool itself, at the
+market price — the same price for everyone.
+
+**Why does the mint end when the pool opens?**
+Because anything else would not be fair. The original design kept the
+mint open after the pool opened, at a price capped at 0.00336 BNB per
+share — while the market could trade far higher. Minters could have
+bought below market and sold into the pool. We removed that design on
+19 November 2026, before the first paid mint: the sale is exactly 168,000
+shares at one flat price, and the mint pauses the moment the pool opens.
+(The old design's numbers also did not close: its pool tokens per share
+scaled with price, so the supply cap would have stopped it at ≈1,340,000
+of its 1,680,000 shares.)
 
 **What if the target is missed?**
 The sale has 14 days from its start (opens 19 Nov 2026, 15:00 UTC;
@@ -65,7 +78,8 @@ a mechanism, not an income promise.
 
 **What's the max supply?**
 510,854,400,000,000 BAISHOU — a hard cap enforced by the contract on
-every mint.
+every mint. The sale itself can mint at most 53,625,600,000,000 (168,000
+shares plus all 16,800 free claims), so the cap is never approached.
 
 **Can the admin take the escrowed money?**
 No. There is no admin withdraw function. The admin can pause the mint,

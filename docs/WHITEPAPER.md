@@ -31,9 +31,10 @@ not by promise, but by contract design.
 
 ## 2. Design principles
 
-1. **One price at a time, for everyone.** At any moment there is exactly one
-   share price, and it is the same for the team, for referrers, and for the
-   smallest buyer.
+1. **One price, for everyone.** There is exactly one share price for the
+   whole sale — flat — and it is the same for the team, for referrers, and
+   for the smallest buyer. When the pool opens, the mint ends; from then on
+   there is only the market price, which is also the same for everyone.
 2. **One cap, for everyone.** No address may mint more than 168 shares.
    There is no whitelist tier, no referral quota, no exception.
 3. **Escrow everything.** All sale proceeds stay inside the contract until
@@ -44,23 +45,23 @@ not by promise, but by contract design.
 ## 3. Shares and price mechanics
 
 The sale is denominated in **shares**. One share always corresponds to
-**168,000,000 BAISHOU tokens** — before the pool opens, after the pool
-opens, at every price. The token amount per share never changes; only the
-BNB price of a share moves.
+**168,000,000 BAISHOU tokens** — for every buyer, at every moment of the
+sale. The token amount per share never changes, and neither does the
+price: the entire sale runs at one flat price.
 
 | Parameter | Value |
 |---|---|
-| Total shares | 1,680,000 |
-| Pre-pool phase | First 168,000 shares at a flat **0.00168 BNB** per share |
-| Post-pool curve | Price rises **+2% per epoch**, one epoch = 16,800 shares, LINEAR increase |
-| Price cap | **0.00336 BNB** per share (2× the starting price), never higher |
+| Total shares | **168,000** — the entire sale |
+| Price | **0.00168 BNB** per share — flat for all 168,000 shares; no curve, no tiers |
 | Per-address cap | **168 shares** per wallet, for the entire sale |
 | Tokens per share | **168,000,000** — fixed |
+| Mint closes | The moment the pool opens (Section 3.3) |
 
-### 3.1 Pre-pool phase
+### 3.1 The sale
 
-The first 168,000 shares are sold at one flat price: 0.00168 BNB per share.
-There is no curve, no discount, and no early-bird tier in this phase.
+All 168,000 shares are sold at one flat price: 0.00168 BNB per share.
+There is no curve, no discount, and no early-bird tier — the first share
+and the last share cost exactly the same.
 
 ### 3.2 Pool opening
 
@@ -71,16 +72,39 @@ The moment the 168,000th share is sold, the pool opens:
   tokens per pre-pool share).
 - **The LP tokens are burned** — liquidity cannot be pulled.
 - Escrowed treasury and referral amounts are released (Section 5).
+- **The mint ends.** In the same moment, the admin pauses the mint — a
+  step announced publicly in advance (Section 3.3). From then on, BAISHOU
+  can only be bought on the market.
 
 If a mint names no referrer, that mint's 5% referral share goes to the pool
 instead, so the pool can open with up to 239.904 BNB.
 
-### 3.3 Post-pool curve
+### 3.3 Why the mint ends at the pool opening — a correction, disclosed
 
-After the pool opens, the mint continues at a price that rises linearly:
-+2% of the base price for every additional epoch of 16,800 shares sold,
-capped at 0.00336 BNB per share. The tokens-per-share amount stays
-168,000,000 throughout.
+The original design kept the mint open for 7 more days after the pool
+opened, at a price rising +2% per 16,800 shares up to a cap of 0.00336 BNB
+per share, for up to 1,680,000 shares in total. On 19 November 2026 —
+**before the first paid mint** — we removed that design, for two reasons:
+
+1. **It was not fair.** If the market price ran above the capped mint
+   price — as it freely can — anyone still able to mint could have bought
+   below market and sold into the pool at the market price. A primary sale
+   running underneath a live market is a discount window for whoever uses
+   it, paid for by everyone trading on the market. That contradicts the
+   one rule this project exists for.
+2. **Its numbers did not close.** On that post-pool path, the pool tokens
+   minted per share scaled with the price, so the token supply cap
+   (Section 6) would have halted the sale at ≈1,340,000 shares — the
+   advertised 1,680,000 could never have been reached.
+
+So the sale is exactly 168,000 shares at one flat price, and the mint
+pauses the moment the pool opens. The pause is an admin action
+(`setPaused`, Section 8), committed to publicly in advance, before any
+buyer had paid. After the pool opens, the only way to buy BAISHOU is the
+pool itself — one market price, the same for everyone. And with the sale
+ending at 168,000 shares, the maximum supply the sale can ever mint is
+53,625,600,000,000 tokens (Section 6): every published number closes
+exactly.
 
 ### 3.4 Free claim
 
@@ -95,8 +119,9 @@ claims carry the same 168,000,000 tokens per share as paid shares.
 - The target deadline is **14 days** after the start:
   **3 Dec 2026, 15:00 UTC**. If 168,000 shares are not sold by then, the
   sale has failed (Section 4).
-- After the pool opens, the mint stays open for **7 more days**, then
-  closes. The mint also closes immediately at sellout (1,680,000 shares).
+- The mint ends the moment the 168,000th share is sold and the pool opens
+  (Section 3.3). If the target is missed, the mint ends at the deadline
+  and the refund path opens (Section 4).
 
 ## 4. Escrow and the refund guarantee
 
@@ -143,6 +168,7 @@ paid **only if and when the pool opens**:
 |---|---|
 | Token | BAISHOU (AgentToken) |
 | Max supply | **510,854,400,000,000** — hard cap in the contract, checked on every mint; it can never be exceeded |
+| Maximum the sale can mint | **53,625,600,000,000** — 168,000 shares × (168,000,000 + 134,400,000) + 16,800 free claims × 168,000,000. The hard cap above is never approached |
 | Team allocation | **None.** No tokens are pre-minted to the team |
 | Tokens per share | 168,000,000 — fixed for the whole sale |
 | Transfer tax | **2% on buys, 2% on sells** |
@@ -178,7 +204,8 @@ everyone.
 The admin is the operator wallet. Its powers are deliberately small, and
 they are listed here completely:
 
-- **Pause** the mint (`setPaused`). Pause never blocks refunds or exits.
+- **Pause** the mint (`setPaused`) — including the pre-announced pause the
+  moment the pool opens (Section 3.3). Pause never blocks refunds or exits.
 - **`startSale()`** — one time only. It starts the 14-day clock and
   unpauses the mint in a single transaction. Before it is called, no
   deadline runs; after it is called, it can never be called again.
@@ -227,9 +254,9 @@ Read these before minting. They are part of the design, not fine print.
   after that window.
 - **Early exit costs 20%.** Exiting before the pool opens forfeits 20% of
   your payment (returned only if the sale goes on to fail).
-- **Post-pool price risk.** After the pool opens, BAISHOU trades on an
-  open market. The mint price cap (0.00336 BNB/share) is not a floor; the
-  market price can fall below what you paid.
+- **Market price risk.** After the pool opens, BAISHOU trades on an open
+  market at whatever price the market sets. That price can fall below the
+  0.00168 BNB per share you paid — possibly far below.
 - **Tax on transfers.** Buys and sells carry a 2% tax (Section 6). Factor
   it into any trade.
 - **Smart-contract risk.** The contracts are verified, tested, and were

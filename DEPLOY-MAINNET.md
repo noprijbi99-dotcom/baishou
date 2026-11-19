@@ -493,3 +493,50 @@ deadline, tx hash and block, in UTC. Deployed via artifact export →
 Live verification: https://baishou.pages.dev (LIVE status + deadline text,
 countdown present, v3 addresses, zero WIB/Indonesian text) and
 https://baishou.pages.dev/llms.txt.
+
+## 13. SALE-DESIGN CORRECTION — mint ends at pool opening (19 November 2026)
+
+**Decision:** 19 November 2026, ~16:09 UTC, by the user, following an
+independent recomputation of the full sale mathematics the same evening
+(audit of the deployed source + live chain state) and an external
+cross-check of the audit's arithmetic.
+
+**State at decision (on-chain):** sale live since 15:04 UTC; paid
+`totalMinted() = 0` — no buyer had paid anything; free claims ongoing.
+The correction was decided and announced before the first paid mint, so
+it disadvantages no existing buyer.
+
+**Old rule (removed):** after the pool opened at 168,000 shares, the mint
+stayed open 7 more days at a price rising +2% per 16,800 shares, capped
+at 0.00336 BNB per share, up to 1,680,000 total shares.
+
+**New rule (effective immediately):** the sale is exactly 168,000 shares
+at a flat 0.00168 BNB per share. The admin will pause the mint
+(`setPaused`) the moment the pool opens. After that, BAISHOU can only be
+bought on the market pool itself — one market price, the same for
+everyone.
+
+**Reasons, disclosed publicly (README, whitepaper §3.3, FAQ, website):**
+
+1. **Fairness.** With the mint open under a live market at a capped price,
+   minters could have bought below market and sold into the pool — a
+   discount window paid for by everyone trading on the market.
+2. **The numbers did not close.** On the post-pool path, pool tokens
+   minted per share scaled with price (`lpT = lpBnb × pool ratio`), so
+   cumulative minting would have hit MAX_SUPPLY (510,854,400,000,000) at
+   ≈1,340,000 shares (audit range 1,341,416–1,347,877; external
+   cross-check ≈1,405,172) — the advertised 1,680,000 was unreachable.
+   Ending the sale at 168,000 shares caps the total the sale can mint at
+   53,625,600,000,000 tokens (168,000 × 302,400,000 + 16,800 ×
+   168,000,000), far below the cap, and every published number closes
+   exactly.
+
+**Unchanged:** 168,000,000 tokens per share; free claim 16,800 × one
+share's tokens per Agent ID; escrow + 100% refund if the target misses
+by 3 Dec 2026, 15:04 UTC; 80% pre-pool exit; pool seeding 225.792–239.904
+BNB + 22,579,200,000,000 tokens with LP burned; treasury 15% / referral
+5% released at pool open; transfer taxes; Agent-ID-only mint.
+
+**Surfaces corrected the same evening:** `README.md`,
+`docs/WHITEPAPER.md`, `docs/FAQ.md`, `docs/AGENT-PROMPT.md`, and the
+website + `llms.txt` at https://baishou.pages.dev.
