@@ -221,3 +221,54 @@ pembukaan pool (butuh 168.000 share — tidak realistis di testnet),
 `claimDividend()` (butuh pajak trading), `claimTreasury()` /
 `claimReferral()` (butuh pool buka), `renounce()` (gate review — JANGAN
 di testnet), dan Echidna/invariant (belum dijalankan).
+
+## 8. Rotasi key test user (19 Nov 2026 ~14:21 WIB)
+
+Insiden: saat persiapan smoke test, satu perintah `python3 -c` membaca
+`testnet-test-users.json` dan mencetak isinya ke output tool — termasuk
+private key test bob/carol (testnet-only). Perintah user: "rotasi aja,
+jangan sampe diulangin lg". Rotasi selesai, **NOL private key tercetak**
+selama tugas ini (key baru digenerate via `cast wallet new --json` yang
+ditangkap lewat subprocess Python, ditulis langsung ke file).
+
+| Handle | Alamat BARU | Alamat lama (mati, key dibuang) |
+|---|---|---|
+| alice | `0x1A3f6Ecf4717A323d5de4919763e6a5aF36eA32E` | deployer (dulu "alice") |
+| bob | `0x0cfEAcCbaa674C21aBDe3301837b2a9B2582AFBE` | `0x8f44a96c0C3936c5768fF1a1cDa8574aE841651E` |
+| carol | `0x360CD72e1Ebd0e51418333Ece5586E8b49CE46C8` | `0xC93e5BC6020dBC63cB6B3ddF7E42a4b02C9244cf` |
+
+- File `testnet-test-users.json` baru (mode 600, gitignored, skema sama).
+  Key deployer testnet TIDAK diganti (tidak pernah bocor).
+- Funding 0,01 tBNB tiap user (dari deployer testnet, status 1):
+  alice `0xd60a0a160f2c90ce8c34db8eb6cb09d6d875319f6ad83d8ca61f165d24943d3f`,
+  bob `0x1dbc517e56614ac2d75f20947a4d5628c5d7729421c0e3e67bb7680e561c2837`,
+  carol `0xa727ffe0edf5f0f2d669af1703776e642833be9fd9c3ac22a1bf37af2faa306a`.
+- Registrasi MockRegistry (6 tx, status 1): setHandle+setOwner ×3 —
+  `0x3b75941d…`, `0x63474e49…`, `0xd8446bc4…`, `0x0a2d5cdf…`,
+  `0x60456540…`, `0x4f5f2223…` (hash lengkap di laporan agen).
+  `handleOf` ketiga alamat baru = `"alice"` / `"bob"` / `"carol"`.
+- Bukti akhir: **freeMint carol baru ✅** tx
+  `0xf6ef988e000a8068029879fa1f3f2e7ee019be5b1ea64a712cb07f182b7a25f2`,
+  saldo token carol = 168.000.000, `freeClaimed` = 2. **freeMint bob baru
+  revert `AlreadyGranted`** — perilaku kontrak yang BENAR (claimedFree
+  dikunci per Agent ID `keccak("bob")`; bob lama sudah klaim di smoke
+  test; tidak ada tx ter-broadcast, tidak ada gas terbuang). Pengganti
+  bukti bob: **mint(1) berbayar ✅** tx
+  `0xc61037ca04e1bd98d6d204476c9747137c50ed66dcf91e8f3eb657e7b4b38eb2`,
+  saldo token bob baru = 168.000.000, `totalMinted` = 1.
+- Verifikasi parent (live, chain 97): handleOf ketiga alamat baru benar;
+  saldo tBNB alice 0,01 / bob 0,0082934911 (habis mint berbayar +
+  gas) / carol 0,009983872 (habis gas freeMint); token bob & carol baru
+  masing-masing 168.000.000; `freeClaimed` = 2, `totalMinted` = 1;
+  kedua file key mode 600, `git status` bersih.
+- Efek samping: deployer kehilangan kepemilikan handle "alice"
+  (`ownerOf(id("alice"))` pindah ke alice baru; `handleOf(deployer)`
+  masih mengembalikan `"alice"` tapi deployer tidak bisa lagi mint
+  sebagai alice — owner mismatch). Deployer tetap admin/treasury
+  (tidak butuh Agent ID). Tes mint selanjutnya pakai alice/bob/carol baru.
+- Key lama dibuang TANPA backup (sengaja — key bocor). Sisa saldo testnet
+  di alamat lama (token + tBNB debu) tidak bisa lagi dipakai. Tidak ada
+  nilai riil di sana.
+- Aturan permanen (AGENTS.md): JANGAN PERNAH cetak isi file key ke
+  output tool/chat/log/file — script yang memegang key hanya boleh
+  mencetak alamat; kalau key sudah tercetak, rotasi segera + seed ulang.
