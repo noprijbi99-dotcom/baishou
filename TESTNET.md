@@ -1,15 +1,13 @@
-# BAISHOU — BSC Testnet (chain 97) — STATUS: ⛔ BLOCKED AT FAUCET
+# BAISHOU — BSC Testnet (chain 97) — STATUS: ✅ DEPLOYED + SMOKE TEST LULUS
 
-**Tanggal:** 19 Nov 2026, ~13:45 WIB (06:45 UTC)
+**Tanggal deploy:** 19 Nov 2026, ~14:05 WIB
 **Deployer testnet (segar):** `0xad5d51D7eE879C47F288F48559BC1914F771fB62`
-**Saldo tBNB deployer:** 0 (dicek live via RPC) — **belum ada dana untuk deploy.**
-**Nonce deployer:** 0 — alamat deploy hasil dry-run di bawah masih berlaku
-selama tidak ada tx lain dari deployer sebelum broadcast.
+**Saldo tBNB deployer:** 0,3 masuk dari faucet (user) → **0,2888 tersisa** setelah deploy + seed + smoke test (termasuk 0,01 tBNB dikirim ke bob untuk gas).
+**Nonce deployer saat deploy:** 0 — alamat hasil deploy SAMA PERSIS dengan prediksi dry-run §4.
 
-> **BELUM ADA KONTRAK YANG TER-DEPLOY.** Tidak ada tx hash deploy, tidak ada
-> alamat kontrak live, tidak ada smoke test. File ini mendokumentasikan
-> persiapan yang selesai + blocker + cara melanjutkan. Jangan kutip alamat
-> "predicted" di bawah sebagai alamat live.
+> **KONTRAK LIVE.** Tx hash deploy, alamat, dan hasil smoke test di §6–§7.
+> Blocker faucet §1 sudah lewat (user klaim 0,3 tBNB via faucet resmi +
+> hCaptcha, 13:56 WIB).
 
 ## 1. Blocker: faucet tBNB tidak bisa diklaim dari VM ini
 
@@ -155,15 +153,71 @@ Lalu verifikasi source + smoke test (belum jalan — menunggu dana):
 
 ## 6. Kontrak live / tx hash / link BscScan
 
-_Belum ada — deploy tertahan di blocker §1. Diisi setelah broadcast._
+**Deploy: 19 Nov 2026 ~14:05 WIB.** Catatan: broadcast pertama GAGAL
+(`transaction gas price below minimum: gas tip cap 1, minimum needed
+100000000`) — forge menebak priority fee 1 wei, padahal minimum testnet
+0,1 gwei. Retry dengan `--with-gas-price 1000000000 --priority-gas-price
+100000000` (1 gwei max, 0,1 gwei tip) sukses. Nonce deployer tetap 0 saat
+retry, jadi alamat hasil = prediksi dry-run §4 persis.
 
 | Kontrak | Alamat | Tx deploy | BscScan testnet |
 |---|---|---|---|
-| AgentToken | — | — | — |
-| AgentMint | — | — | — |
-| MockRegistry | — | — | — |
-| Pair BAISHOU/WBNB | — | — | — |
+| AgentToken | `0xd5Aa2BF99c020a13B24326F527B187f15637A038` | `0xb0d178330a935df2be1cf4f36fe063108038caca66e839b55ee5a98e0950a107` (gas 3.575.454) | https://testnet.bscscan.com/address/0xd5Aa2BF99c020a13B24326F527B187f15637A038 |
+| AgentMint | `0x71fDdA39DAE64ca346024E5D41f2587818d1FaB8` | `0xaaeeb64b30d7e8b984055fa0660fcb2bb3f347342263936d0cb111dbf3d2b7f0` (gas 4.049.894) | https://testnet.bscscan.com/address/0x71fDdA39DAE64ca346024E5D41f2587818d1FaB8 |
+| MockRegistry | `0x1E670b339e96c520E4D42aD5Cf832E80968C2E9E` | `0xb754325e6fcbf56628b5badb232a93a65fcb95d970042e60d30c8df6c850ef36` (gas 317.527) | https://testnet.bscscan.com/address/0x1E670b339e96c520E4D42aD5Cf832E80968C2E9E |
+| Pair BAISHOU/WBNB | `0x238db3a329a29586d72d4857A08d683cb38f63e0` | dibuat saat deploy AgentToken (likuiditas 0 — pool buka di share 168.000) | https://testnet.bscscan.com/address/0x238db3a329a29586d72d4857A08d683cb38f63e0 |
+| `token.initialize(mint)` | — | `0x8b7f76a8879b5d0ab5dbe796c5f731182c119fc3ec783ab760c1c70ffb0605ee` (gas 45.621) | — |
+
+Total gas deploy: **7.988.496** (≈ 0,0008 tBNB pada tip efektif 0,1 gwei).
+Seed registry (6 call, gas total 268.464): `0x629d9f449f2b5208a5048f3147e662e3944ad9501157c8802f31df9c8229f645`,
+`0x61c99c1b6894f6588e1f8fe87803f6e3d68ed9e32d88dc4ba823dda4a9bd732e`,
+`0x18db491f579d2b88e142e729392b40763d2c3010030c9856d00be1eb2c9bde19`,
+`0x776b7064d2c474681c8c007df8bfeb4bc82efbb9b8ddf63adbb393832ca2de58`,
+`0x8c7c2e938abc184cac284cdc9eac4a6be0fc3f481149693aa86ea8cc57a06dc1`,
+`0x0c5ef747972a458215c059ec4a6d2378dcbd7477c638636e4b24adea6be3d938`
+(alice/bob/carol ter-seed; `handleOf(alice)` = `"alice"` dicek live).
+
+**Verifikasi source:**
+- **Sourcify: ✅ KEDUANYA `exact_match`** (creation + runtime) —
+  AgentToken job `6830c129-3d81-46b2-ae85-33af59934611`,
+  AgentMint job `00b4c565-bfbb-40b4-ad79-4c18f245e0d1`
+  (dicek via `GET /v2/contract/97/<address>`).
+- **BscScan testnet: ❌ BELUM terverifikasi** — 3 rute dicoba dan semua
+  gagal: (1) `forge verify-contract` + API key Etherscan V2 via surrogate
+  → `Invalid API Key` (surrogate tidak di-swap untuk request dari binary
+  forge, hanya lewat helper urllib); (2) submit manual V2 API
+  `verifysourcecode` dengan flattened source → `Error!` generik;
+  (3) submit manual dengan standard JSON (16 source) → `Error!` generik.
+  Dugaan kuat: paket gratis Etherscan tidak mengizinkan *submission*
+  verifikasi untuk chain 97 (modul `proxy` chain 97 saja sudah ditolak
+  paket gratis; modul `contract` read jalan, write tidak). BUKAN masalah
+  kode — Sourcify exact_match membuktikan bytecode cocok dengan source.
+  BscScan tetap menampilkan kontrak + tx + saldo; source bisa dibaca
+  lewat Sourcify. Coba lagi nanti dengan API key berbayar atau dari
+  browser (BscScan verify form).
 
 ## 7. Smoke test
 
-_Belum dijalankan — menunggu dana faucet. Hasil per langkah + tx hash dicatat di sini setelah deploy._
+**Dijalankan 19 Nov 2026 ~14:07 WIB, SEMUA LULUS** (script `/tmp/smoke_test.sh`,
+bukan di repo — key test hanya di variabel shell):
+
+| # | Langkah | Tx | Hasil |
+|---|---|---|---|
+| 0 | Fund bob 0,01 tBNB (gas freeMint) | `0xae658ef09e86c8ceb5d7996d7ccb0f5ebf69780d07772b532a913229e99cd025` | ✅ status 1 |
+| 1 | `setPaused(false)` [deployer] | `0xa5827ef6aa78a54d89ad51654288d42ef48998dcef777f5d23c3b1b9f2ce5d21` | ✅ status 1, `paused` = false |
+| 2 | `mint(1, 0x0, 0,00168)` [alice] value 0,00168 tBNB | `0xd896813b18c4cd0214cbe745e12400fc8a6755b391b8a33612376c93c172e662` | ✅ status 1, `totalMinted` = 1, saldo token alice = 168.000.000, `deposits` = 0,00168, `pendingBnb` = 0,001428 (= 85%: 80% pool + 5% referral jatuh ke pool tanpa referrer) |
+| 3 | `freeMint()` [bob] | `0x620fcb9b1b0e7f93a1024b76b10b1fc12f5f555b21f60e3fdacbd5a201b9fcda` | ✅ status 1, `freeClaimed` = 1, saldo token bob = 168.000.000, `participantCount` = 2 |
+| 4 | `exit(1)` [alice] | `0x7e84f225f6738a6eca134e5db8175f75eb80522300b09395156098c133e0c9bc` | ✅ status 1, `totalMinted` = 0, saldo token alice = 0 (dibakar), `forfeitOf` = 0,000336 (20%), refund 0,001344 (80%, event `Exited` terkonfirmasi; saldo tBNB alice 0,2874494452 → 0,2887796175 setelah dikurangi gas exit) |
+| 5 | Registry | — | ✅ `handleOf(deployer)` = `"alice"`; alice + bob terdaftar sebagai peserta |
+
+State awal sebelum smoke test (dicek live): `totalMinted` = 0,
+`paused` = true, `opened()` = false, `pair` =
+`0x238db3a329a29586d72d4857A08d683cb38f63e0`, `name()` = `"BAISHOU"`,
+`totalSupply` = 0, `costOf(1)` = 0,00168 tBNB — semua sesuai desain.
+
+**Yang BELUM diuji di testnet (di luar smoke test ini):** `openEarly()` /
+pembukaan pool (butuh 168.000 share — tidak realistis di testnet),
+`claimRefund()` (butuh launch gagal — butuh time travel 7 hari),
+`claimDividend()` (butuh pajak trading), `claimTreasury()` /
+`claimReferral()` (butuh pool buka), `renounce()` (gate review — JANGAN
+di testnet), dan Echidna/invariant (belum dijalankan).
