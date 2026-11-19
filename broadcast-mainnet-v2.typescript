@@ -1,0 +1,54 @@
+Script started on 2026-11-19 11:51:53+00:00 [COMMAND="forge script script/DeployMainnet.s.sol:DeployBaishouMainnet --rpc-url https://bsc-dataseed.binance.org/ --broadcast" <not executed on terminal>]
+[⠃] Compiling...[⠊] Compiling...[⠒] Compiling...[⠢] Compiling...[⠆] Compiling...
+[⠰] Compiling 1 files with Solc 0.8.28[⠔] Compiling 1 files with Solc 0.8.28[⠒] Compiling 1 files with Solc 0.8.28[⠑] Compiling 1 files with Solc 0.8.28[⠘] Compiling 1 files with Solc 0.8.28[⠃] Compiling 1 files with Solc 0.8.28[⠊] Compiling 1 files with Solc 0.8.28[⠒] Compiling 1 files with Solc 0.8.28[⠢] Compiling 1 files with Solc 0.8.28[⠆] Compiling 1 files with Solc 0.8.28[⠰] Compiling 1 files with Solc 0.8.28[⠔] Compiling 1 files with Solc 0.8.28[⠒] Compiling 1 files with Solc 0.8.28[⠑] Compiling 1 files with Solc 0.8.28[⠘] Compiling 1 files with Solc 0.8.28[⠃] Compiling 1 files with Solc 0.8.28[⠊] Compiling 1 files with Solc 0.8.28[⠒] Compiling 1 files with Solc 0.8.28
+[⠢] Solc 0.8.28 finished in 1.71s
+Compiler run successful with warnings:
+Warning (2018): Function state mutability can be restricted to pure
+   --> src/AgentMint.sol:534:5:
+    |
+534 |     function _curveShare(Pool memory p, uint256 lpBnb) private {
+    |     ^ (Relevant source part starts here and spans across multiple lines).
+
+Script ran successfully.
+
+== Logs ==
+  AgentToken deployed: 0x155F36ff76242281c4b29689D51c197296e706a2
+  Pair: 0xF5BD30CCa572F5f57eeBA508d532B432aDA3A705
+  AgentMint deployed: 0x443eABC5567e1F4838920f74Fc6401B09f93bf53
+  token.initialize(mint) done; minter: 0x443eABC5567e1F4838920f74Fc6401B09f93bf53
+  deployer: 0x3730f81E6f311ab40222da1393e07Af6F68AffB5
+  treasury/feeTreasury/admin: 0x319581821414b324Dd5Db9795e42E7ee3A287900
+  registrar: 0x60B9262456dE011F7d15a54CdD8c48bAaa8B022F
+  wbnb: 0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c
+  factory: 0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73
+  poolManager: 0xa0FfB9c1CE1Fe56963B0321B32E7A0302114058b
+  infinityVault: 0x0e3234056AD5b469aDa1AFd30eE3719AC99A361F
+  MINT STAYS CLOSED: paused=true, saleStartTime=0. No startSale called.
+
+## Setting up 1 EVM.
+
+==========================
+
+Chain 56
+
+Estimated max fee per gas: 0.05 gwei
+Estimated base fee per gas: 0 gwei
+Estimated max priority fee per gas: 0.05 gwei
+
+Estimated total gas used for script: 11604596
+
+Estimated amount required: 0.0005802298 BNB
+
+==========================
+
+
+==========================
+
+ONCHAIN EXECUTION COMPLETE & SUCCESSFUL.
+
+Transactions saved to: /home/hatch/workspace/baishou/broadcast/DeployMainnet.s.sol/56/run-latest.json
+
+Sensitive values saved to: /home/hatch/workspace/baishou/cache/DeployMainnet.s.sol/56/run-latest.json
+
+
+Script done on 2026-11-19 11:52:41+00:00 [COMMAND_EXIT_CODE="0"]

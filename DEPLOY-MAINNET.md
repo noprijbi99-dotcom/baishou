@@ -207,7 +207,7 @@ https://bscscan.com/address/0x6cA8489C75641bdf7a0A2Af1Eee4375f52a51F00
   JANGAN dipost sampai deploy terverifikasi live (sudah terverifikasi
   sekarang — §7).
 
-## 9. V2 — CHECKPOINT PRA-BROADCAST (19 Nov 2026 malam) — ⏸ MENUNGGU BROADCAST PARENT
+## 9. V2 — CHECKPOINT PRA-BROADCAST (19 Nov 2026 malam) — ✅ BROADCAST SELESAI, lihat §10
 
 **Kenapa v2:** red-team RT-01 — di v1 `failureTime` = deploy + 7 hari
 (26 Nov 2026 14:28:47 WIB); selama mint masih ditutup menunggu review,
@@ -305,5 +305,74 @@ registrar `0x60B9262456dE011F7d15a54CdD8c48bAaa8B022F`; WBNB
    kontrak.
 5. Sisa deployer dibiarkan (jangan disapu tanpa kata user).
 
-**STATUS CHECKPOINT: SIAP — broadcast BELUM dilakukan (lane ini
-berhenti di sini sesuai brief).**
+**STATUS CHECKPOINT: SIAP — broadcast SUDAH dilakukan, hasilnya di §10.**
+
+## 10. ✅ V2 MAINNET LIVE — deploy selesai 19 Nov 2026 ~18:52 WIB
+
+**Broadcast:** SATU percobaan, perintah polos §9 langkah 2 (tanpa flag
+gas — estimasi forge tip 0,05 gwei diterima jaringan kali ini), exit
+code 0, di dalam `script` (terekam — lihat bawah § ini). Pre-flight di
+shell luar sesi rekaman: alamat turunan key == deployer `0x3730…AffB5`,
+nonce == 3 terkonfirmasi di 4 endpoint RPC, saldo 0,0020509337 BNB.
+
+| Kontrak | Alamat (AKTUAL = prediksi §9 persis) | Tx | Gas |
+|---|---|---|---|
+| AgentToken | `0x155F36ff76242281c4b29689D51c197296e706a2` | `0x3cac0519f660cb9e7ee6abd1e27f2d9591b505185ad36c1d6950c212c7aae1e4` | 4.843.820 |
+| AgentMint | `0x443eABC5567e1F4838920f74Fc6401B09f93bf53` | `0xa30e9f6cf628e43d9d46c2b2636884970a54ab4d823ea0a1519b8bc06cb66153` | 4.037.105 |
+| Pair BAISHOU/WBNB | `0xF5BD30CCa572F5f57eeBA508d532B432aDA3A705` | dibuat saat deploy AgentToken (likuiditas 0 — pool buka di share 168.000) | — |
+| `token.initialize(mint)` | — | `0x753971cbeb78ff09a82b7557ca58d24c249b2b76a1cbdd6a88ad2f0e9d244690` | 45.621 |
+
+Semua 3 tx status 1, block 134.498.551. Total gas deploy: **8.926.546**
+(0,0004463273 BNB @ 0,05 gwei efektif). BscScan mainnet:
+https://bscscan.com/address/0x155F36ff76242281c4b29689D51c197296e706a2 dan
+https://bscscan.com/address/0x443eABC5567e1F4838920f74Fc6401B09f93bf53
+**Alamat v2 ini MENGGANTIKAN alamat v1 (§7) untuk semua pemakaian.**
+
+**State live (dibaca via cast, chain 56, setelah broadcast — SEMUA SESUAI):**
+- `name()` = `"BAISHOU"`, `symbol()` = `"BAISHOU"`, `totalSupply()` = 0
+- `pair()` = `0xF5BD…A705` (sesuai prediksi), `minter()` = AgentMint,
+  pair `getReserves()` = 0/0 (likuiditas 0)
+- `paused()` = **true** ✅ (mint TETAP TUTUP)
+- `saleStartTime()` = **0** ✅ (sale BELUM dimulai — jam 14 hari belum jalan)
+- `failureTime()` = **0** ✅, `saleFailed()` = **false** ✅
+- `totalMinted()` = **0** ✅, `opened()` = **false** ✅
+- `costOf(1)` = 1.680.000.000.000.000 wei = **0,00168 BNB** ✅
+- `treasury()` = `feeTreasury()` = `admin()` = `0x3195…8900` ✅
+  (dompet utama user)
+- Deployer akhir: saldo **0,0016046064 BNB**, nonce 6 — **DIBIARKAN,
+  TIDAK disapu balik** (perintah user tetap berlaku).
+- `startSale` TIDAK dipanggil. ✅
+
+**Verifikasi source — KEDUANYA exact_match / terverifikasi di kedua tempat:**
+- **Sourcify: ✅ exact_match KEDUANYA** (creation + runtime) —
+  AgentToken job `a4d0ac03-40ea-45f9-bfe4-d61a5e102d0a` (selesai
+  2026-11-19T11:57:10Z), AgentMint job `a475b930-8ca2-4b0e-a39b-85088347211a`
+  (selesai 2026-11-19T11:57:37Z).
+- **BscScan mainnet: ✅ terverifikasi KEDUANYA** (dibaca live via
+  `getsourcecode`): AgentToken ContractName "AgentToken", compiler
+  v0.8.28+commit.7893614a, optimizer runs 200, EVM paris, source 35.446
+  karakter (terimpor otomatis dari Sourcify — source identik v1);
+  AgentMint ContractName "AgentMint", compiler sama, source 95.432
+  karakter, checkverifystatus "Pass - Verified" (GUID
+  `a6bizrbmnz1yxw7jgmsuh1amayhbcifdzymaecn4y35bm3wptf`). Relay
+  Etherscan-nya Sourcify untuk AgentMint kena limit harian relay
+  ("Daily limit of 500 source code submissions reached") → AgentMint
+  disubmit manual via skrip POST standard-JSON pakai surrogate konektor
+  etherscan-v2 (pola v1 yang sama; input standar direkonstruksi dari
+  metadata artefak: 15 source, optimizer 200, paris; constructor args
+  352 byte diekstrak dari tx deploy).
+
+**Rekaman broadcast v2 (video X):**
+- Typescript: `broadcast-mainnet-v2.typescript` (2.867 B — satu
+  percobaan sukses; export key di shell LUAR, tidak terekam).
+- **Audit rahasia SEBELUM publish: BERSIH** — grep: 0 string 0x+64hex,
+  0 kata sensitif (private_key/mnemonic/apikey/secret/password/dll);
+  cek nilai key deployer vs isi rekaman: False (nilai key TIDAK ada di
+  rekaman, hanya hasil boolean yang dicatat). Frame dicek visual
+  (t=30: log deploy + alamat publik; t=57: roles + "MINT STAYS CLOSED"
+  + estimasi). Yang tampil hanya alamat publik + tx + log forge.
+- MP4: `broadcast-mainnet-v2.mp4` (4.895.173 B ≈ 4,9 MB, 60 dtk,
+  1280×720, h264 30fps) — render ffmpeg drawtext dari typescript
+  bersih (font DejaVu Sans Mono, hijau terminal, scroll). Cacat
+  kosmetik kelas v1: glyph spinner jadi kotak; baris header perintah
+  terpotong di tepi kanan.
