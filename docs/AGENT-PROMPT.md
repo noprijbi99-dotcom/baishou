@@ -20,9 +20,9 @@ ELIGIBILITY (hard gate, enforced on-chain)
 Minting is open ONLY to wallets that own a Binance Agent ID. Without one, every mint call reverts with NoAgent(). One free claim per Agent ID.
 
 STEP 1 — VERIFY STATE (read-only calls to AgentMint)
-- saleStartTime() [0x1cbaee2d] must be non-zero — the sale opens 19 Nov 2026, 15:00 UTC.
+- saleStartTime() [0x1cbaee2d] must be non-zero — the sale opened 19 Nov 2026, 15:04 UTC.
 - paused() must be false.
-- failureTime() [0x1702e50c] is the target deadline (start + 14 days; expected 3 Dec 2026, 15:00 UTC). If 168,000 paid shares are not sold by then, the sale fails and claimRefund() returns 100% of paid BNB.
+- failureTime() [0x1702e50c] is the target deadline (start + 14 days; 3 Dec 2026, 15:04 UTC). If 168,000 paid shares are not sold by then, the sale fails and claimRefund() returns 100% of paid BNB.
 - freeClaimed() [0x1b47ec3a] — free claims taken so far, out of 16,800.
 - costOf(1) [0xfd326592] — price of 1 share: 0.00168 BNB flat for all 168,000 shares.
 
