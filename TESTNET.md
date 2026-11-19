@@ -272,3 +272,60 @@ ditangkap lewat subprocess Python, ditulis langsung ke file).
 - Aturan permanen (AGENTS.md): JANGAN PERNAH cetak isi file key ke
   output tool/chat/log/file — script yang memegang key hanya boleh
   mencetak alamat; kalau key sudah tercetak, rotasi segera + seed ulang.
+
+## 9. V2 — redeploy testnet + smoke jam baru (19 Nov 2026 malam)
+
+Konteks: patch v2 (fix RT-01/02, commit `4492e8e`) — `failureTime`
+berjangkar `startSale()` (SALE_WINDOW 14 hari), `openEarly` dihapus.
+Deploy ulang ke chain 97 dengan script yang sama (`script/Deploy.s.sol`,
+gas 1 gwei / tip 0,1 gwei). Deployer sama
+(`0xad5d51D7eE879C47F288F48559BC1914F771fB62`, saldo sebelum deploy
+0,2587516011 tBNB).
+
+| Kontrak | Alamat v2 | Tx deploy |
+|---|---|---|
+| MockRegistry | `0x2f7018e156f7d6ecf94a2ddc6fa43eb8c539d136` | `0xf5c5007a09acbcf5…` |
+| AgentToken | `0xd851de404c1c7f42194aefd8f1afa9ca1bada722` | `0xf386f8a67fad86d8…` |
+| AgentMint | `0x48452c8b2947f1b4f3de86dece6c3a16b3e373e5` | `0x701ae73375a7b67d…` |
+| Pair BAISHOU/WBNB | `0xC4B47AF896673dac8fC27cc3FcBD30061D625faB` | dibuat saat deploy AgentToken |
+
+**State awal (dicek live):** `paused` = true, `saleStartTime` = 0,
+`failureTime()` = 0, `saleFailed()` = false, `totalMinted` = 0 — jam
+target BELUM jalan sebelum startSale (inti fix RT-01).
+Registry di-seed untuk user hasil rotasi §8 (alice/bob/carol alamat
+baru; terverifikasi `handleOf` + `ownerOf`). Catatan: RPC publik testnet
+beberapa kali menggugurkan respons `cast send` (tx tidak mendarat) —
+semua send diverifikasi ulang via read; retry selalu mendarat.
+
+**Smoke LIVE (chain 97):**
+| Langkah | Hasil |
+|---|---|
+| `startSale()` [deployer] | ✅ `saleStartTime` = 1795088023, `failureTime()` = 1796297623 — selisih **tepat 1.209.600 detik = 14 hari**; `paused` = false |
+| `startSale()` kedua (eth_call) | ✅ revert `AlreadyStarted` (satu kali saja) |
+| `mint(1)` [alice] tx `0xb3f927b787b305486169b26d723c834293d3c88993d11fb5285d02ace18a1371` | ✅ `deposits` = 0,00168, saldo token alice = 168.000.000, `totalMinted` = 1, `participantCount` = 1 |
+| `freeMint()` [bob] tx `0x281afc2ba2152123e9088f1490e01afb9c159ba6795a62c68a0668fb9e056012` | ✅ bob +168.000.000 token, `freeClaimed` = 1, `participantCount` = 2 (klaim gratis = 168 jt token/Agent ID, kuota global 16.800 klaim, tidak menambah `totalMinted`) |
+| `exit(1)` [alice] | ✅ `deposits` → 0, `forfeitOf` = 0,000336 (20%), token alice → 0 (dibakar), refund 80% = 0,001344 |
+
+**Leg kegagalan (refund 100%) — TIDAK bisa di live testnet** (tidak ada
+time travel). Dua rute fork dicoba dan gagal di infrastruktur, bukan di
+kontrak: fork anvil dari state live (data-seed Binance) jalan untuk
+read, tapi `mint` carol kena `missing trie node` (RPC publik bukan
+archive node); fork publicnode timeout saat genesis. Rute pengganti:
+**anvil lokal tanpa fork**, bytecode `src/` IDENTIK, hanya
+WBNB/Factory/Registry mock (`script/DeployLocal.s.sol`):
+AgentMint `0xD2cE4c80E9696a59a23EFF8D20b9F84910B4bb34`, AgentToken
+`0x4744D3581E9d5DE52a1Ca8dCd148072104F58526`, MockRegistry
+`0x71fDdA39DAE64ca346024E5D41f2587818d1FaB8`.
+
+| Langkah (anvil lokal) | Hasil |
+|---|---|
+| `startSale()` | ✅ `failureTime − saleStartTime` = 1.209.600 (14 hari) |
+| alice `mint(1)` + `exit(1)` | ✅ `forfeitOf` = 0,000336 |
+| carol `mint(10)` | ✅ `deposits` = 0,0168 |
+| `anvil_increaseTime` +1.213.200 (14 hari + 1 jam) | ✅ `saleFailed()` = **true** |
+| carol `claimRefund()` | ✅ `deposits` → 0; saldo akhir carol = modal − gas saja → **refund 100% (0,0168)** |
+| alice `claimRefund()` | ✅ `forfeitOf` → 0 — forfeit exit 0,000336 ikut kembali saat launch gagal |
+
+Skenario yang sama juga tercakup in-process oleh `ForkRefund.t.sol` +
+`SaleClock.t.sol` di jam baru (suite penuh 243 hijau, seed default +
+fuzz-seed 42; invariant 512 runs hijau).
