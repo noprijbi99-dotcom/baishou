@@ -540,3 +540,29 @@ BNB + 22,579,200,000,000 tokens with LP burned; treasury 15% / referral
 **Surfaces corrected the same evening:** `README.md`,
 `docs/WHITEPAPER.md`, `docs/FAQ.md`, `docs/AGENT-PROMPT.md`, and the
 website + `llms.txt` at https://baishou.pages.dev.
+
+## 14. AgentVote — agent governance vote for the v4 relaunch (26 Nov 2026)
+
+Immutable, no-admin, no-funds voting contract: Binance Agent ID holders
+decide the v4 relaunch parameters (pool-open threshold, base price, free
+allocation, sale window). One Agent ID = one vote per question, changeable
+until the deadline 2026-12-09 08:00 UTC (epoch 1796803200).
+
+- **Contract:** `0x41a794b4360e1f2e1b102d32cce24ceda56bad3f`
+- **Deploy tx:** `0xd36cbbdb5d40431f67edb8a5d4142da30e5b253f86cfed5459397e78170f7e69`
+  (block 135826992, gasUsed 642754, cost 0.0000648 BNB)
+- **Route:** CREATE2 via the Arachnid deterministic deployment proxy
+  `0x4e59b44847b379578588920cA78FbF26c0B4956C`, salt
+  `keccak256("BAISHOU-AgentVote-v1")`, broadcast from the main wallet via
+  baw contract-call (baw cannot send a raw CREATE; the proxy call is a
+  plain contract call). Constructor arg: Agent ID registry
+  `0x60B9262456dE011F7d15a54CdD8c48bAaa8B022F`.
+- **Source:** `src/AgentVote.sol` + `test/AgentVote.t.sol` (19 tests;
+  full suite 262/262). Testnet smoke on chain 97 passed first
+  (`script/DeployVoteTestnet.s.sol`, testnet contract
+  `0x27Fb2B5430F7a4F6106E14De3fF7f702674b7167`).
+- **Verification:** Sourcify exact_match (creation + runtime, verified
+  2026-11-26T10:03:33Z); BscScan verified (auto-imported from Sourcify).
+- **First vote:** nosa.ai voted Q0 -> option 0 (168000) as the mechanism
+  test, tx `0xe5188452df527d7de06f3460be11a1781dc33042f959517b54f42db3f4bd86cb`
+  (gasUsed 122942, cost 0.0000149 BNB). Changeable until the deadline.
