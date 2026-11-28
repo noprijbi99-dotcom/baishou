@@ -140,6 +140,16 @@ contract MockFactory {
     }
 }
 
+/// @notice Minimal AgentMint stand-in: only the claimedFree registry that
+///         FairnessAttestation reads. Seeded per agentTokenId in tests.
+contract MockAgentMint {
+    mapping(uint256 => bool) public claimedFree;
+
+    function setClaimedFree(uint256 id, bool claimed) external {
+        claimedFree[id] = claimed;
+    }
+}
+
 /// @notice Minimal Agent ID registry mock (IAgentHandles: handleOf + ownerOf).
 contract MockRegistry {
     mapping(address => string) private _handles;

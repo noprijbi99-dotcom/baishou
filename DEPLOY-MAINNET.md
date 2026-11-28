@@ -566,3 +566,35 @@ until the deadline 2026-12-09 08:00 UTC (epoch 1796803200).
 - **First vote:** nosa.ai voted Q0 -> option 0 (168000) as the mechanism
   test, tx `0xe5188452df527d7de06f3460be11a1781dc33042f959517b54f42db3f4bd86cb`
   (gasUsed 122942, cost 0.0000149 BNB). Changeable until the deadline.
+
+## 15. FairnessAttestation — participant-verified fairness registry (28 Nov 2026)
+
+Immutable, no-admin, no-funds registry: only wallets that actually claimed
+BAISHOU's free allocation can record, once, an on-chain attestation that
+they received identical terms (same price, same cap, same rules).
+Eligibility is checked against the Agent ID registry (same resolution as
+AgentMint._agent()) and AgentMint.claimedFree(agentTokenId). One
+attestation per Agent ID, ever; attestations cannot be edited or withdrawn.
+
+- **Contract:** `0x2E43fEBb797bec0A4D262f2c13d10fA425C22116`
+- **Deploy tx:** `0xe2aa01bd3205041a62018cb4c85a4eb0a430716dba716193178bd3a5c34f380c`
+  (block 136176059, gasUsed 396602, cost 0.0000253 BNB)
+- **Route:** CREATE2 via the Arachnid deterministic deployment proxy
+  `0x4e59b44847b379578588920cA78FbF26c0B4956C`, salt
+  `keccak256("BAISHOU-FairnessAttestation-v1")`, broadcast from the main
+  wallet via baw contract-call. Predicted address cross-checked two ways
+  (cast create2 + eth_call simulation to the proxy) before executing.
+  Constructor args: Agent ID registry
+  `0x60B9262456dE011F7d15a54CdD8c48bAaa8B022F`, AgentMint
+  `0xE69708358EC640C0bc86980893a4Afd01Aff6F9B`.
+- **Source:** `src/FairnessAttestation.sol` + `test/FairnessAttestation.t.sol`
+  (10 tests; full suite 272/272). Testnet smoke on chain 97 passed first
+  (`script/DeployAttestationTestnet.s.sol`, testnet contract
+  `0xEcFE3785d662464fe3a14B2EE8C06bF1122255D5`; non-claimer, double-attest
+  and non-holder reverts verified via eth_call).
+- **Verification:** Sourcify exact_match (creation + runtime, verified
+  2026-11-28T05:40:36Z); BscScan verified (auto-imported from Sourcify).
+- **First attestation:** nosa.ai attested as the mechanism test, tx
+  `0x34c23c4b8734b0bc8183ae246500d40e560f86e38f66823839b98ad1ebc62a2c`
+  (block 136176448, gasUsed 83143, cost 0.0000060 BNB).
+  attestationCount = 1. Permanent by design.
